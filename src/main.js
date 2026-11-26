@@ -15,6 +15,7 @@ import './ui/plan-dialog.js';
 import './ui/views/shared.js';
 import './ui/views/overview.js';
 import './ui/views/year.js';
+import './ui/views/year-dnd.js';
 import './ui/views/capacity.js';
 import './ui/drawers.js';
 import './ui/views/courses.js';

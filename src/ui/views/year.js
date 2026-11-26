@@ -33,11 +33,14 @@ export function filteredPeople() {
 }
 const stColor = { complete: 'var(--good)', partial: 'var(--warn)', none: 'var(--crit)', locked: 'var(--line-2)', unassigned: 'var(--line-2)' };
 export const personMeta = p => [p.cluster === 'offen' ? 'Cluster offen' : p.cluster === 'ausgeschlossen' ? 'ausgeschlossen' : 'Cluster ' + p.cluster, p.target, p.level].filter(Boolean).join(' · ');
+/** Maße des gezeichneten Jahresplans (Breite eines Tages in Pixeln) – Grundlage für Ziehen und Ablegen. */
+export let ganttGeom = null;
 function drawGantt() {
   const el = $('#gantt'); if (!el) return;
   const cal = IX.cal, n = IX.n, lw = parseFloat(getComputedStyle(el).getPropertyValue('--lw')) || 232;
   const dw = Math.round(Math.max(1.5, (el.clientWidth - lw - 2) / n) * UI.gZoom * 100) / 100, W = Math.round(n * dw);
   const px = d => Math.round(d * dw * 10) / 10;
+  ganttGeom = { dw, n };
   const workCum = new Int32Array(n + 1); for (let d = 0; d < n; d++) workCum[d + 1] = workCum[d] + IX.work[d];
   const absBy = new Map(); for (const a of S.absences) { let l = absBy.get(a.pk); if (!l) absBy.set(a.pk, l = []); l.push(a); }
   const people = filteredPeople();
@@ -72,7 +75,7 @@ function drawGantt() {
       const label = e.title && e.courseKind ? e.title : TSHORT[e.type] || e.type;
       runs.forEach(([x, y], ri) => {
         const w = Math.max(2, px(y - x + 1) - (dw >= 3 ? 1 : 0)), last = ri === runs.length - 1;
-        t += '<button class="bar ' + cls + (e.partial && last ? ' pt' : '') + '" style="left:' + px(x) + 'px;width:' + w + 'px" data-act="event-open" data-id="' + esc(e.id) + '" data-tk="event" aria-label="' + esc(e.type + ' ' + fmt(e.start) + ' bis ' + fmt(e.end)) + '">' + (w >= label.length * 6.3 + 10 ? '<span>' + esc(label) + '</span>' : '') + '</button>';
+        t += '<button class="bar ' + cls + (e.partial && last ? ' pt' : '') + '" style="left:' + px(x) + 'px;width:' + w + 'px" data-act="event-open" data-id="' + esc(e.id) + '" data-drag="event" data-tk="event" aria-label="' + esc(e.type + ' ' + fmt(e.start) + ' bis ' + fmt(e.end)) + '">' + (w >= label.length * 6.3 + 10 ? '<span>' + esc(label) + '</span>' : '') + '</button>';
       });
     }
     if (!evs.length) t += '<small class="g-open">' + esc(pr.state === 'locked' ? 'ausgeschlossen – keine neuen Maßnahmen' : pr.state === 'unassigned' ? 'Cluster offen' : (S.report.find(r => r.pk === p.pk)?.reason || 'Planung offen')) + '</small>';
@@ -121,9 +124,12 @@ VIEWS.year = {
       <span><i class="sw a-Urlaub" style="height:4px"></i>Abwesenheit</span>
       <span><i class="sw" style="background:var(--school)"></i>Ferien</span>
     </div>
+    <div class="palette noprint"><span class="small ink2"><b>Ziehen und Ablegen:</b> Element auf eine Person ziehen – oder einen Balken verschieben</span>
+      ${[Core.LOGBOOK, 'FitCheck', 'ICA', ...(S.settings.courseBlocks ? [] : Core.COURSE_TYPES)].map(t => html`<span class="pchip" data-drag="new" data-type="${t}" data-tip="${t}: auf eine Zeile ziehen. Dauer und Betreuung kommen aus dem Ausbildungsweg der Person; beim Ablegen wird die Kapazität geprüft."><i class="sw ${tcls(t)}"></i>${TSHORT[t] || t}</span>`)}
+      ${S.courses.filter(c => c.seats == null || Core.courseMembers(S, c.id).length < c.seats).slice(0, 14).map(c => html`<span class="pchip crs" data-drag="seat" data-id="${c.id}" data-tip="Lehrgangsplatz: auf eine Person ziehen, um sie in ${c.title} (${fmtS(c.start)} – ${fmt(c.end)}) einzutragen"><i class="sw ${tcls(c.type)}"></i>${c.title} <span class="muted">${fmtS(c.start)} · ${Core.courseMembers(S, c.id).length}${c.seats != null ? '/' + c.seats : ''}</span></span>`)}</div>
     <div class="gantt" id="gantt" data-keep="gantt"></div>
     <div class="noprint" style="margin-top:8px">${capLegend()}</div>
-    <p class="small muted" style="margin-top:8px">Balken anklicken zum Bearbeiten, Namen anklicken für Personenkalender und Wegfortschritt. Ausbildungstage liegen nur auf Arbeitstagen (Mo–Fr, ohne eingetragene Feiertage); die dünne Linie verbindet verteilte Tage derselben Maßnahme.</p>`;
+    <p class="small muted" style="margin-top:8px">Balken anklicken zum Bearbeiten oder mit gedrückter Maustaste verschieben; Namen anklicken für Personenkalender und Wegfortschritt. Beim Ziehen zeigt jeder Tag grün (frei, Kapazität reicht), gelb (unter 0-Punkt) oder rot (nicht möglich). Ausbildungstage liegen nur auf Arbeitstagen (Mo–Fr, ohne eingetragene Feiertage); die dünne Linie verbindet verteilte Tage derselben Maßnahme.</p>`;
   },
   after: drawGantt, resize: drawGantt
 };

@@ -12,16 +12,19 @@ export function elementFor(st, ix, p, type) {
   const c = (cfgOf(st, p) || {})[type] || {}, total = Number.isInteger(c.days) && c.days > 0 ? c.days : 1;
   let have = creditOf(p, type);
   for (const e of ix.evByPerson.get(p.pk) || []) if (e.type === type) have += (ix.evDays.get(e.id) || []).length;
-  return { days: Math.max(1, total - have) || total, total, have, trainee: c.trainee ?? (type === PREP ? 0 : 1), mentor: num(c.mentor), tec: num(c.tec), examiner: num(c.examiner) };
+  return { days: total - have > 0 ? total - have : total, total, have, trainee: c.trainee ?? (type === PREP ? 0 : 1), mentor: num(c.mentor), tec: num(c.tec), examiner: num(c.examiner) };
 }
 /**
- * o: { pk, type, start (Tagesindex), len (Arbeitstage), factors { trainee, mentor, tec, examiner }, moveId (Termin, der verschoben wird),
- *      spread (true: nur zulässige Tage belegen und dafür nach hinten ausweichen) }
- * Liefert { days, perDay: [{ d, state 'ok'|'warn'|'crit'|'note', why, after, zero, min }], ok, crit, warn, notes, short, start, end }.
+ * o: { pk, type, start (Tagesindex), len (Tage), factors { trainee, mentor, tec, examiner }, moveId (Termin, der verschoben wird),
+ *      spread (true: Tage mit zu knapper Kapazität überspringen und dafür nach hinten ausweichen) }
+ * Lehrgänge sind ein fester Block: jeder Arbeitstag ab dem Start zählt; Abwesenheit oder Kollision sind dort Befunde.
+ * Alle anderen Maßnahmen belegen – wie im Planer – ab dem Start die nächsten Tage, an denen die Person im passenden
+ * Dienst und frei ist; freie Tage, Abwesenheiten und belegte Tage werden übersprungen. Geprüft wird dann die Kapazität.
+ * Liefert { days, perDay: [{ d, state 'ok'|'warn'|'crit'|'note', why, after, zero, min }], ok, crit, warn, notes, skipped, short, start, end }.
  */
 export function checkPlacement(st, ix, o) {
   const i = ix.pi.get(o.pk), S = st.settings, c = ix.cap, L = ix.load, f = o.factors || {}, course = isCourseType(o.type);
-  const res = { days: [], perDay: [], ok: false, crit: 0, warn: 0, notes: 0, short: false, start: '', end: '', len: o.len };
+  const res = { days: [], perDay: [], ok: false, crit: 0, warn: 0, notes: 0, skipped: 0, short: false, start: '', end: '', len: o.len };
   if (i === undefined || !(o.len > 0)) { res.short = true; return res; }
   const m = num(f.mentor), t = num(f.tec), x = num(f.examiner), sum = num(f.trainee) + m + t + x;
   // Last des Termins, der gerade verschoben wird, zählt an seinen bisherigen Tagen nicht mit
@@ -33,14 +36,16 @@ export function checkPlacement(st, ix, o) {
   const look = d => {
     const why = [], k = assign(ix, i, d), r = { d, state: 'ok', why, k };
     const bad = w => { why.push(w); r.state = 'crit'; }, soft = w => { why.push(w); if (r.state === 'ok') r.state = 'warn'; };
-    if (ix.abs[i][d]) bad('Abwesenheit');
-    if (o.type !== PREP && ix.evByDay[d].some(e => e.pk === o.pk && e.type !== PREP && e.id !== o.moveId)) bad('Terminkollision');
+    const out = w => { if (course) bad(w); else r.skip = w; };              // außerhalb von Lehrgängen kommt so ein Tag gar nicht in Frage
+    if (ix.abs[i][d]) out('Abwesenheit');
+    if (o.type !== PREP && ix.evByDay[d].some(e => e.pk === o.pk && e.type !== PREP && e.id !== o.moveId)) out('Terminkollision');
     if (k < 0) {
       if (course) { why.push('laut Dienstplan frei – Dienstplananpassung'); if (r.state === 'ok') r.state = 'note'; }
-      else bad('Kein Dienst / Frei');
+      else r.skip = 'Kein Dienst / Frei';
       return r;
     }
-    if (!course && o.type !== LOGBOOK && k % 3 !== 0) bad('Außerhalb Frühdienst');
+    if (!course && o.type !== LOGBOOK && k % 3 !== 0) r.skip = 'Außerhalb Frühdienst';
+    if (r.skip) return r;
     const mine = own.get(k * 1000 + d) || [0, 0, 0, 0];
     if (m > 0 && S.mentorLimit != null && L.mentor[k][d] - mine[1] + m > S.mentorLimit + EPS) (S.cap ? bad : soft)('Mentoren ausgeschöpft');
     if (t > 0 && S.tecLimit != null && L.tec[k][d] - mine[2] + t > S.tecLimit + EPS) (S.cap ? bad : soft)('TEC ausgeschöpft');
@@ -55,6 +60,7 @@ export function checkPlacement(st, ix, o) {
   for (let d = Math.max(0, o.start); d < ix.n && res.days.length < o.len; d++) {
     if (!ix.work[d]) continue;
     const r = look(d);
+    if (r.skip) { res.skipped++; continue; }
     if (o.spread && (r.state === 'crit' || (r.state === 'warn' && !allowWarn))) continue;
     res.days.push(d); res.perDay.push(r);
     if (r.state === 'crit') res.crit++; else if (r.state === 'warn') res.warn++; else if (r.state === 'note') res.notes++;

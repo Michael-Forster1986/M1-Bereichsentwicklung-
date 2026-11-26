@@ -88,32 +88,40 @@ describe('Maßnahme im Jahresplan ablegen', () => {
     expect(Core.elementFor(st, ix, p, 'Practical Logbook')).toMatchObject({ days: 30, total: 30, trainee: 1, mentor: 0.5 });
     expect(Core.elementFor(st, ix, p, 'FitCheck')).toMatchObject({ days: 2, tec: 1 });
   });
-  it('meldet je Tag, ob die Stelle frei und die Kapazität ausreichend ist', () => {
+  it('belegt ab dem Ablagetag die nächsten Diensttage der Person und prüft dort die Kapazität', () => {
     const f = Core.elementFor(st, ix, p, 'Practical Logbook'), start = firstDuty(60, 0);
     const r = Core.checkPlacement(st, ix, { pk: p.pk, type: 'Practical Logbook', start, len: 10, factors: f });
     expect(r.days).toHaveLength(10); expect(r.days[0]).toBe(start);
-    expect(r.perDay.every(x => ['ok', 'warn', 'crit'].includes(x.state))).toBe(true);
-    expect(r.crit).toBeGreaterThan(0);                                              // ein Block von 10 Arbeitstagen trifft im 5/2-Rhythmus immer freie Tage
-    expect(r.perDay.filter(x => x.state === 'crit').every(x => x.why.length > 0)).toBe(true);
-    const okDay = r.perDay.find(x => x.state === 'ok');
-    expect(okDay.after).toBeGreaterThanOrEqual(okDay.zero);
-  });
-  it('weicht auf Wunsch auf zulässige Tage aus', () => {
-    const f = Core.elementFor(st, ix, p, 'Practical Logbook'), start = firstDuty(60, 0);
-    const r = Core.checkPlacement(st, ix, { pk: p.pk, type: 'Practical Logbook', start, len: 10, factors: f, spread: true });
-    expect(r.ok).toBe(true); expect(r.days).toHaveLength(10);
+    expect(r.skipped).toBeGreaterThan(0);                                           // freie Tage im 5/2-Rhythmus werden übersprungen
     for (const d of r.days) { expect(ix.abs[i][d]).toBe(0); expect(Core.assign(ix, i, d)).toBeGreaterThanOrEqual(0); }
+    expect(r.ok).toBe(true);
+    expect(r.perDay.every(x => x.state === 'ok' && x.after >= x.zero)).toBe(true);
   });
-  it('erkennt Abwesenheit, Kollision, Dienstregel und Kapazitätsgrenze', () => {
+  it('legt Prüfungstage nur in den Frühdienst und nie auf belegte Tage', () => {
+    const late = firstDuty(60, 1), r = Core.checkPlacement(st, ix, { pk: p.pk, type: 'FitCheck', start: late, len: 2, factors: { trainee: 1 } });
+    for (const d of r.days) expect(Core.assign(ix, i, d) % 3).toBe(0);
+    expect(r.days[0]).toBeGreaterThan(late);
+    expect(Core.checkPlacement(st, ix, { pk: p.pk, type: 'Practical Logbook', start: late, len: 1, factors: { trainee: 1 } }).days[0]).toBe(late);
+  });
+  it('meldet zu knappe Kapazität und weicht auf Wunsch auf zulässige Tage aus', () => {
+    const tight = Core.clone(st), early = firstDuty(60, 0), k = Core.assign(ix, i, early);
+    // an genau diesem Tag ist die Besetzung zu knapp
+    tight.capacity.push({ date: ix.cal.iso[early], area: Core.kArea(k), shift: Core.kShift(k), net: 20, min: 30, zero: 35, checked: true, absencesIncluded: true, gross: 25, absent: 0 });
+    const tx = Core.buildIndex(tight), f = { trainee: 1 };
+    const r = Core.checkPlacement(tight, tx, { pk: p.pk, type: 'Practical Logbook', start: early, len: 3, factors: f });
+    expect(r.ok).toBe(false); expect(r.crit).toBe(1);
+    expect(r.perDay[0]).toMatchObject({ d: early, state: 'crit', why: ['unter Minimum'] });
+    const alt = Core.checkPlacement(tight, tx, { pk: p.pk, type: 'Practical Logbook', start: early, len: 3, factors: f, spread: true });
+    expect(alt.ok).toBe(true); expect(alt.days).toHaveLength(3); expect(alt.days).not.toContain(early);
+  });
+  it('behandelt einen Lehrgang als festen Block: Abwesenheit ist ein Befund, freie Tage sind ein Hinweis', () => {
     const abs = st.absences.find(a => a.pk === p.pk), d0 = ix.cal.idx(abs.start);
-    const onAbs = Core.checkPlacement(st, ix, { pk: p.pk, type: 'FitCheck', start: d0, len: 1, factors: {} });
-    expect(onAbs.perDay.find(x => x.d >= d0).why).toContain('Abwesenheit');
-    const late = firstDuty(60, 1), r = Core.checkPlacement(st, ix, { pk: p.pk, type: 'FitCheck', start: late, len: 1, factors: { trainee: 1 } });
-    expect(r.perDay[0].why).toContain('Außerhalb Frühdienst');
-    expect(Core.checkPlacement(st, ix, { pk: p.pk, type: 'Practical Logbook', start: late, len: 1, factors: { trainee: 1 } }).perDay[0].why).not.toContain('Außerhalb Frühdienst');
-    const tight = Core.clone(st); tight.limits.M1['Früh'] = { min: 60, zero: 70 };
-    const tx = Core.buildIndex(tight), early = firstDuty(60, 0);
-    expect(Core.checkPlacement(tight, tx, { pk: p.pk, type: 'FitCheck', start: early, len: 1, factors: { trainee: 1 } }).perDay[0].why).toContain('unter Minimum');
+    const r = Core.checkPlacement(st, ix, { pk: p.pk, type: 'Theorie', start: d0, len: 10, factors: { trainee: 1 } });
+    expect(r.days).toHaveLength(10);
+    expect(r.perDay.some(x => x.why.includes('Abwesenheit'))).toBe(true);
+    expect(r.crit).toBeGreaterThan(0); expect(r.skipped).toBe(0);
+    const free = Core.checkPlacement(st, ix, { pk: p.pk, type: 'Theorie', start: firstDuty(150, 0), len: 10, factors: { trainee: 1 } });
+    expect(free.notes).toBeGreaterThan(0);
   });
   it('rechnet beim Verschieben die eigene Last nicht doppelt', () => {
     const s2 = Core.clone(st), early = firstDuty(60, 0), e = { id: 'mv', pk: p.pk, type: 'Practical Logbook', auto: false, start: ix.cal.iso[early], end: ix.cal.iso[early], dates: [ix.cal.iso[early]], trainee: 1, mentor: 0.5, tec: 0, examiner: 0, target: '' };
@@ -123,7 +131,7 @@ describe('Maßnahme im Jahresplan ablegen', () => {
     const fresh = Core.checkPlacement(st, ix, { pk: p.pk, type: e.type, start: early, len: 1, factors: f });
     expect(stay.perDay[0].why).not.toContain('Terminkollision');
     expect(stay.perDay[0].after).toBeCloseTo(fresh.perDay[0].after, 9);
-    expect(Core.checkPlacement(s2, x2, { pk: p.pk, type: e.type, start: early, len: 1, factors: f }).perDay[0].why).toContain('Terminkollision');
+    expect(Core.checkPlacement(s2, x2, { pk: p.pk, type: e.type, start: early, len: 1, factors: f }).days[0]).toBeGreaterThan(early);   // ohne Verschieben ist der Tag belegt
   });
 });
 
