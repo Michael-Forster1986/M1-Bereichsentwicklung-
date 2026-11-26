@@ -1,5 +1,5 @@
 import * as Core from '../core/index.js';
-import { isDesktop } from '../platform/desktop.js';
+import { isDesktop, logError } from '../platform/desktop.js';
 import { $ } from './dom.js';
 import { fmt } from './format.js';
 import { LS, UI, autosaveOn, replaceProject, setProject, store } from './state.js';
@@ -21,7 +21,7 @@ export function boot() {
   if (note) toast(note);
   if (saved) { const st = saved.years[saved.active]; toast('Im Browser liegt ein zwischengespeicherter Stand (' + st.people.length + ' Personen, ' + fmt(String(st.meta.modified).slice(0, 10)) + ')', '', { label: 'Wiederherstellen', run: () => replaceProject(saved, 'Zwischengespeicherter Stand wiederhergestellt') }); }
   let rz = 0; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const v = VIEWS[UI.view]; if (v && v.resize) v.resize($('#main')); }, 120); });
-  window.addEventListener('error', e => toast('Programmfehler: ' + e.message, 'crit'));
-  window.addEventListener('unhandledrejection', e => toast('Fehler: ' + (e.reason?.message || e.reason), 'crit'));
+  window.addEventListener('error', e => { logError(e.error || e.message, 'Programmfehler'); toast('Programmfehler: ' + e.message, 'crit'); });
+  window.addEventListener('unhandledrejection', e => { logError(e.reason, 'Unbehandelter Fehler'); toast('Fehler: ' + (e.reason?.message || e.reason), 'crit'); });
   initDesktop();
 }

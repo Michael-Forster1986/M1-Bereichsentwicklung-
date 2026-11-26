@@ -1,7 +1,7 @@
 {
   "name": "m1-qualifikationscockpit",
   "productName": "M1 Qualifikationscockpit",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "Jahresplanung von Qualifikationsmaßnahmen mit Kapazitätsprüfung – Desktop-Programm",
   "author": "M1 Bereichsentwicklung",
   "homepage": "https://github.com/Michael-Forster1986/M1-Bereichsentwicklung-",
@@ -51,7 +51,14 @@
       "package.json"
     ],
     "asar": true,
-    "publish": null,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Michael-Forster1986",
+        "repo": "M1-Bereichsentwicklung-",
+        "releaseType": "release"
+      }
+    ],
     "electronLanguages": [
       "de",
       "en-US"
@@ -111,5 +118,8 @@
       ],
       "artifactName": "M1-Qualifikationscockpit-${version}.${ext}"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

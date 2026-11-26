@@ -35,6 +35,16 @@ contextBridge.exposeInMainWorld('m1desktop', {
     read: () => ipcRenderer.invoke('m1:recovery-read'),
     clear: () => ipcRenderer.invoke('m1:recovery-clear')
   },
+  // Aktualisierung des Programms
+  update: {
+    state: () => ipcRenderer.invoke('m1:update-state'),
+    check: () => ipcRenderer.invoke('m1:update-check'),
+    install: () => ipcRenderer.invoke('m1:update-install'),
+    openPage: () => ipcRenderer.invoke('m1:update-page')
+  },
+  // Fehleraufzeichnung: nur der Name einer Aktion bzw. der Text einer Fehlermeldung, keine Projektdaten
+  trace: name => ipcRenderer.send('m1:trace', String(name).slice(0, 80)),
+  log: text => ipcRenderer.send('m1:log', String(text).slice(0, 4000)),
   // Schließen des Fensters
   closeAck: () => ipcRenderer.send('m1:close-ack'),
   closeNow: () => ipcRenderer.send('m1:close-now'),
