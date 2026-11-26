@@ -587,6 +587,18 @@ test('Lehrgänge: Basic Knowledge mit Modulen, N/A und Teilbelegern – bis in d
   await waitFor(async () => (await page.locator('#gantt .bar.md').count()) === 4, 'Modulabschnitte im Jahresplan');
   assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M2"]').count(), 2);
   assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M1"]').count(), 1);
+  // Seitenleiste der Person: benötigte Module ansehen und ändern – der Jahresplan folgt sofort
+  await page.evaluate(() => { const row = [...document.querySelectorAll('#gantt .g-row')].find(r => r.querySelectorAll('.bar.md').length === 1); row.querySelector('.g-lab').click(); });
+  await page.waitForSelector('#pMods');
+  assert.match(await page.locator('#pMods').innerText(), /M2[\s\S]*Teilbeleger/);
+  await page.click('#pMods [data-act="person-modules"]'); await page.waitForSelector('#pmList');
+  assert.equal(await page.locator('#pmList input').count(), 17);
+  assert.equal(await page.isChecked('#pmList input[value="1"]'), false);
+  assert.equal(await page.isChecked('#pmList input[value="2"]'), true);
+  await page.click('#modal [data-act="m:all"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /braucht alle Module/.test(await toastText()), 'Person braucht wieder alle Module');
+  await waitFor(async () => (await page.locator('#gantt .bar.md').count()) === 6, 'beide belegen jetzt drei Module');
+  await page.click('[data-act="drawer-close"]');
   // ohne Teilbeleger: die Module entfallen, alle belegen wieder den ganzen Zeitraum
   await menu('go', 'courses'); await page.waitForSelector('#crsDetail #crsMods');
   await page.click('#crsDetail [data-chg="crs-partial"]'); await page.click('#modal [data-act="m:ok"]');

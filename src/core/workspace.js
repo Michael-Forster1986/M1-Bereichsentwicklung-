@@ -98,7 +98,7 @@ export function rolloverYear(prev, opt = {}) {
       delete q.credit;
       if (o.reopen && !isLocked(p)) {                                  // Ziel erreicht: neue Zuordnung ist eine fachliche Entscheidung
         Object.assign(q, { cluster: 'offen', target: '', level: '', confirmed: false, gate: '' });
-        delete q.rotation; delete q.customRoute; delete q.targetAssumed;
+        delete q.rotation; delete q.customRoute; delete q.targetAssumed; delete q.modules;   // auch die benötigten Module gehörten zum erreichten Ziel
         info.reopened++;
       }
     } else if (state === 'partial' && o.credit) {

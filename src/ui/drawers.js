@@ -93,6 +93,8 @@ function drawerPerson(p) {
         ${p.rotation ? html`<button class="btn sm" data-act="person-rot-clear" data-pk="${p.alias}">Rotation entfernen</button>` : html`<span class="muted">leer = alle Tage im eigenen Bereich</span>`}</div>` : ''}
       ${route && route.length ? html`<div class="row small" data-tip="Tage, die vor diesem Planungsjahr bereits erbracht wurden. Der Planer verteilt nur den Rest. Beim Anlegen eines Folgejahres wird der Wert automatisch übernommen."><span class="ink2">Vorleistung aus Vorjahren (Tage)</span>${route.map(t => html`<label class="c">${TSHORT[t] || t}<input type="number" class="w60" min="0" max="999" data-chg="person" data-pk="${p.alias}" data-f="credit:${t}" value="${Core.creditOf(p, t) || ''}" placeholder="–" aria-label="Vorleistung ${tname(t)}"></label>`)}</div>` : ''}
     </div></div>
+    ${(route && route.includes(Core.MODULE_TYPE)) || p.modules ? html`<div class="row small" id="pMods" data-tip="Teilbeleger brauchen nur bestimmte Module. In einem Lehrgang mit Modulen belegen sie dann nur diese Tage – das gilt für den Planer, die beste Besetzung und den Jahresplan.">
+      <span class="ink2">${tname(Core.MODULE_TYPE)} – benötigte Module:</span><b>${p.modules ? Core.moduleText(p.modules) : 'alle'}</b>${p.modules ? pill('Teilbeleger', 'info') : ''}<button class="btn sm" data-act="person-modules" data-pk="${p.alias}">Module wählen</button></div>` : ''}
     <div class="row noprint">${route ? html`<button class="btn sm" data-act="route-person" data-pk="${p.alias}">Individuellen Weg bearbeiten</button>` : ''}<span class="sp"></span><button class="btn sm danger" data-act="person-delete" data-pk="${p.alias}">Person entfernen</button></div>` };
 }
 CHG.person = t => {
@@ -112,6 +114,25 @@ CHG.person = t => {
   });
 };
 ACT['person-rot-clear'] = t => commit('Rotation entfernt', () => { delete P(t.dataset.pk).rotation; });
+/** Welche Module eine Person braucht (Teilbeleger). Ihre Termine in Lehrgängen mit Modulen folgen der Auswahl. */
+ACT['person-modules'] = t => {
+  const p = P(t.dataset.pk); if (!p) return;
+  const n = Core.MODULE_COUNT, mine = new Set(p.modules || Array.from({ length: n }, (_, i) => i + 1));
+  const setAll = v => { for (const i of document.querySelectorAll('#pmList input')) i.checked = v; };
+  openModal({ title: 'Benötigte Module · ' + pName(p), body: html`
+    <p class="ink2">Welche Module von ${tname(Core.MODULE_TYPE)} braucht diese Person? Sind alle angekreuzt, belegt sie jeden Lehrgang ganz. Ein Teilbeleger belegt in einem Lehrgang mit Modulen nur die angekreuzten.</p>
+    <div class="mod-pick" id="pmList" style="grid-template-columns:repeat(4,minmax(0,1fr))">${Array.from({ length: n }, (_, i) => html`<label class="c"><input type="checkbox" value="${i + 1}" ${mine.has(i + 1) ? raw('checked') : ''}> <b>${Core.moduleName(i + 1)}</b></label>`)}</div>
+    <div class="row" style="margin-top:10px"><button class="btn sm" data-act="m:all">Alle Module</button><button class="btn sm" data-act="m:none">Keines</button></div>`,
+    footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Speichern</button>`,
+    handlers: { all: () => setAll(true), none: () => setAll(false), ok: () => {
+      const picked = [...document.querySelectorAll('#pmList input')].filter(i => i.checked).map(i => +i.value);
+      if (!picked.length) return toast('Mindestens ein Modul wählen', 'crit');
+      closeModal();
+      let r = { removed: 0 };
+      if (commit('', () => { r = Core.setPersonModules(S, IX, p.pk, picked); }))
+        toast(pName(p) + (picked.length === n ? ' braucht alle Module' : ' braucht ' + Core.moduleText(picked)) + (r.removed ? ' · aus ' + r.removed + (r.removed === 1 ? ' Lehrgang' : ' Lehrgängen') + ' ausgetragen, weil dort keines dieser Module stattfindet' : ''), r.removed ? 'crit' : '');
+    } } });
+};
 ACT['route-person'] = t => { const p = P(t.dataset.pk); UI.routeCluster = p.cluster; UI.routePerson = p.pk; closeDrawer(); go('routes'); };
 ACT['person-delete'] = async t => {
   const p = P(t.dataset.pk); if (!p) return;

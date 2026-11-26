@@ -115,6 +115,17 @@ describe('Module eines Lehrgangs', () => {
     const th = Core.normCourse({ type: 'Theorie', title: 'T', start: '2027-03-01', end: '2027-03-05', modules: mods() }, Core.courseTypesOf(st));
     expect(th.modules).toBeUndefined();
   });
+  it('Jahreswechsel: die benötigten Module ziehen mit – außer das Ziel ist erreicht', () => {
+    const st = base(), [done, open] = c1(st);
+    done.modules = [1, 2]; open.modules = [3];
+    // „done“ hat seinen Weg vollständig im Plan, „open“ nichts
+    st.routes['1'] = ['FitCheck', 'ICA'];
+    const res = Core.replanPeople(st, Core.buildIndex(st), [done.pk]); st.events = res.events; st.report = res.report;
+    expect(Core.routeProgress(st, Core.buildIndex(st), done).state).toBe('complete');
+    const next = Core.rolloverYear(st).state;
+    expect(next.people.find(p => p.pk === done.pk).modules).toBeUndefined();
+    expect(next.people.find(p => p.pk === open.pk).modules).toEqual([3]);
+  });
   it('der Planer vergibt Plätze modulgenau und plant den weiteren Weg danach', () => {
     const st = base(), c = course(st), [full, part, none] = c1(st);
     c.seats = 40;
