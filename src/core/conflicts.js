@@ -1,4 +1,5 @@
-import { EPS, LOGBOOK, PREP } from './constants.js';
+import { EPS, PREP } from './constants.js';
+import { shiftIssue, shiftOk } from './measures.js';
 import { isLocked } from './people.js';
 import { assign, eventK } from './indexing.js';
 
@@ -15,7 +16,7 @@ export function findConflicts(st, ix) {
       const k0 = assign(ix, i, d);
       if (k0 < 0) { add(e.courseKind ? soft : hard, e.courseKind ? 'Dienstplananpassung (laut Plan frei)' : 'Kein Dienst / Frei'); continue; }
       if (ix.abs[i][d]) add(hard, 'Abwesenheit');
-      if (!e.courseKind && e.type !== LOGBOOK && k0 % 3 !== 0) add(hard, 'Außerhalb Frühdienst');
+      if (!e.courseKind && !shiftOk(st, e.type, k0)) add(hard, shiftIssue(st, e.type));
       if (e.type !== PREP && ix.evByDay[d].some(x => x !== e && x.pk === e.pk && x.type !== PREP)) add(hard, 'Terminkollision');
       if (S.cap) {
         const k = eventK(ix, e, d, k0);

@@ -36,7 +36,7 @@ app.commandLine.appendSwitch('enable-features', 'DocumentPolicyIncludeJSCallStac
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
 
 // ---------- Einstellungen (Benutzerprofil) ----------------------------------
-const settings = { recovery: false, backups: true, updates: true, recent: [], lastDir: '', exportDir: '', bounds: null };
+const settings = { recovery: false, backups: true, updates: true, practice: false, recent: [], lastDir: '', exportDir: '', bounds: null };
 const settingsFile = () => path.join(app.getPath('userData'), 'einstellungen.json');
 const recoveryFile = () => path.join(app.getPath('userData'), 'Wiederherstellung.' + EXT);
 function loadSettings() {
@@ -45,6 +45,7 @@ function loadSettings() {
     settings.recovery = x.recovery === true;
     settings.backups = x.backups !== false;
     settings.updates = x.updates !== false;
+    settings.practice = x.practice === true;             // Übungsmodus: Start mit simulierten Daten statt leer
     settings.recent = (Array.isArray(x.recent) ? x.recent : []).filter(f => typeof f === 'string').slice(0, 8);
     for (const k of ['lastDir', 'exportDir']) settings[k] = typeof x[k] === 'string' ? x[k] : '';
     settings.bounds = x.bounds && typeof x.bounds === 'object' ? x.bounds : null;
@@ -193,7 +194,7 @@ function buildMenu() {
   const template = [
     { label: '&Datei', submenu: [
       { label: 'Neues Projekt …', accelerator: 'CmdOrCtrl+N', click: send('act', 'new-empty') },
-      { label: 'Demo-Daten erzeugen …', click: send('act', 'load-demo') },
+      { label: 'Übungsmodus ein- / ausschalten', click: send('act', 'practice-toggle') },
       sep,
       { label: 'Öffnen …', accelerator: 'CmdOrCtrl+O', click: send('act', 'load-project') },
       { label: 'Zuletzt geöffnet', submenu: recent },
@@ -250,7 +251,7 @@ const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!t
 const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (trusted(e)) fn(e, ...args); });
 
 ipcMain.on('m1:init', e => {
-  e.returnValue = trusted(e) ? { info: { version: app.getVersion(), platform: process.platform, ext: EXT }, settings: { recovery: settings.recovery, backups: settings.backups, updates: settings.updates } } : null;
+  e.returnValue = trusted(e) ? { info: { version: app.getVersion(), platform: process.platform, ext: EXT }, settings: { recovery: settings.recovery, backups: settings.backups, updates: settings.updates, practice: settings.practice } } : null;
 });
 on('m1:ready', () => { rendererReady = true; if (pendingFile) { const f = pendingFile; pendingFile = null; deliverFile(f); } });
 on('m1:doc-state', (_e, st) => {
@@ -264,7 +265,7 @@ on('m1:close-cancel', () => { clearTimeout(closeTimer); restartForUpdate = false
 on('m1:close-now', () => { clearTimeout(closeTimer); closing = true; if (win) win.close(); });
 
 handle('m1:settings-set', (key, value) => {
-  if (key !== 'recovery' && key !== 'backups' && key !== 'updates') throw new Error('Unbekannte Einstellung');
+  if (!['recovery', 'backups', 'updates', 'practice'].includes(key)) throw new Error('Unbekannte Einstellung');
   settings[key] = value === true; saveSettings();
   if (key === 'updates') setUpdatesEnabled(settings.updates);
   return true;

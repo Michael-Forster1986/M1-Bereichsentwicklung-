@@ -60,17 +60,23 @@ VIEWS.help = {
         <p class="small ink2">Jede Ansicht links gehört zu einem dieser Schritte. Oben in der Kopfzeile stehen die Dinge, die Sie ständig brauchen: Planungsjahr, „Neu berechnen“, Rückgängig, ${save}.</p></section>
 
       <section class="card" id="h-start"><h2>2 · Schritt für Schritt zum Jahresplan</h2>
-        <p>So stellen Sie von den Demo- oder Testdaten auf die echte Planung um. Ihre Personen mit Qualifikationen und Clusterzuordnung bleiben dabei immer erhalten.</p>
+        <h3>Normalbetrieb und Übungsmodus</h3>
+        <p>Das Programm startet <b>leer</b>. Ihre Daten spielen Sie einzeln ein oder Sie öffnen ein gespeichertes Projekt. Zum Einarbeiten gibt es den <b>Übungsmodus</b>: Er füllt das Fenster mit erfundenen Personen samt Dienstplan, Urlaub, Lehrgängen und berechnetem Jahresplan.</p>
+        <ul class="h-list"><li><b>Einschalten:</b> auf der leeren Übersicht „Übungsmodus einschalten“ oder der Schalter unter ${go('data', 'Daten & Datenschutz')}${isDesktop ? ' (auch Menü Datei → Übungsmodus ein- / ausschalten)' : ''}.</li>
+          <li><b>Ausschalten</b> leert das Programm wieder. Die Einstellung bleibt gespeichert: Wer im Übungsmodus beendet, startet auch wieder dort.</li>
+          <li>Wer ein eigenes Projekt öffnet oder anlegt, verlässt den Übungsmodus von selbst. In der Kopfzeile steht immer, ob Sie simulierte Daten sehen.</li></ul>
+        <h3>Vom leeren Programm zum Jahresplan</h3>
+        <p>Jeder Baustein wird einzeln eingespielt, jeweils mit Prüfung und Vorschau. Personen mit Qualifikationen und Clusterzuordnung bleiben bei allen späteren Schritten erhalten.</p>
         <ol class="h-steps">
-          ${step(1, 'Projekt öffnen', html`Den vorhandenen Stand mit Personen und Clustern öffnen (${isDesktop ? html`Menü „Datei → Öffnen“ oder ${kbd('Strg', 'O')}` : '„Laden“ in der Kopfzeile'}). Dateien der früheren HTML-Fassung werden als Kopie übernommen. ${go('data', 'Daten & Datenschutz')}`)}
-          ${step(2, 'Prüfen, was noch simuliert ist', html`Die Karte <b>„Bereit für die echte Planung?“</b> zeigt je Baustein einen grünen Haken oder ein gelbes Ausrufezeichen. Mit <b>„Simulierte Daten entfernen …“</b> löschen Sie erfundene Abwesenheiten, Szenariotermine und den berechneten Plan – nichts davon betrifft Ihre Personen.`)}
+          ${step(1, 'Personen einspielen oder Projekt öffnen', html`Stammdaten als CSV oder Excel einspielen – oder einen vorhandenen Stand öffnen (${isDesktop ? html`Menü „Datei → Öffnen“ oder ${kbd('Strg', 'O')}` : '„Laden“ in der Kopfzeile'}). Dateien der früheren HTML-Fassung werden als Kopie übernommen. ${go('data', 'Daten & Datenschutz')}`)}
+          ${step(2, 'Prüfen, was noch fehlt oder simuliert ist', html`Die Karte <b>„Bereit für die echte Planung?“</b> zeigt je Baustein einen grünen Haken oder ein gelbes Ausrufezeichen. Stammt ein Stand aus dem Übungsmodus, löscht <b>„Simulierte Daten entfernen …“</b> erfundene Abwesenheiten, Szenariotermine und den berechneten Plan – nichts davon betrifft Ihre Personen.`)}
           ${step(3, 'Urlaubsplan einspielen', html`Die Excel-Tabelle des Urlaubsplans wählen und die Kürzel zuordnen. Einzelheiten im nächsten Kapitel. ${go('data', 'Urlaubsplan einspielen')}`)}
           ${step(4, 'Lehrgänge festlegen', html`Feste Lehrgangstermine einspielen; für den übrigen Bedarf die besten Zeiträume berechnen lassen und die Plätze besetzen. ${go('courses', 'Lehrgänge')}`)}
           ${step(5, 'Neu berechnen', html`Der Planer verteilt alle übrigen Schritte um Urlaub und Lehrgänge herum und zeigt das Ergebnis zuerst im Vergleich. Erst „Plan übernehmen“ ändert den Stand.`)}
           ${step(6, 'Nacharbeiten', html`Im Jahresplan einzelne Elemente mit der Maus verschieben oder neu hineinziehen; das Programm prüft sofort die Kapazität. ${go('year', 'Jahresplan')}`)}
           ${step(7, 'Prüfen, speichern, weitergeben', html`Bericht ansehen, ${isDesktop ? html`mit ${kbd('Strg', 'S')} speichern` : 'Projektdatei sichern'}, Gesamtbericht als PDF oder die Excel-Arbeitsmappe ausgeben. ${go('report', 'Bericht')}`)}
         </ol>
-        <div class="note">Der <b>Dienstplan</b> darf vorerst simuliert bleiben. Die Kapazität ist dann eine Näherung und überall als „simuliert“ gekennzeichnet. Sobald der echte Dienstplan vorliegt, spielen Sie ihn unter „Daten & Datenschutz“ ein – am Vorgehen ändert sich nichts.</div></section>
+        <div class="note">Der <b>Dienstplan</b> darf vorerst fehlen: Dann gilt für jede Person ihr Dienst aus den Stammdaten, und die Kapazität ist eine Näherung. Sobald der echte Dienstplan vorliegt, spielen Sie ihn unter „Daten & Datenschutz“ ein – am Vorgehen ändert sich nichts.</div></section>
 
       <section class="card" id="h-urlaub"><h2>3 · Urlaubsplan einspielen</h2>
         <p>Erwartet wird die übliche Excel-Tabelle: <b>eine Zeile je Person, eine Spalte je Tag</b>, in den Zellen Kürzel. Vorn steht die Personalnummer oder der Name.</p>
@@ -107,7 +113,8 @@ VIEWS.help = {
       <section class="card" id="h-plan"><h2>5 · Neu berechnen</h2>
         <p>„Neu berechnen“ verteilt alle Schritte der Ausbildungswege auf zulässige Tage. Fixierte Termine und eingetragene Lehrgangsteilnahmen bleiben stehen; nur berechnete Termine werden neu verteilt.</p>
         <ul class="h-list"><li>Ausbildungstage liegen auf Arbeitstagen (Mo–Fr, ohne Feiertage) mit Dienst, nie auf Abwesenheiten.</li>
-          <li>FitCheck, ICA und Vorbereitung liegen nur im Frühdienst; Logbook-Tage in jedem Dienst.</li>
+          <li>Jede Maßnahme liegt nur in den Diensten, die für sie zugelassen sind. Vorgabe: Logbook in jedem Dienst, alles andere nur im Frühdienst – einstellbar unter ${go('routes', 'Ausbildungswege')}.</li>
+          <li>Die Schritte eines Wegs werden in der dort festgelegten Reihenfolge geplant.</li>
           <li>Lehrgänge: der Planer vergibt freie Plätze in den vorhandenen Lehrgängen. Gibt es keinen passenden Termin, bleibt der Schritt offen und der Bericht nennt den Grund.</li>
           <li>Die ICA liegt nach allen Kursen und nach dem Abschluss aller Doings; ein Tag Vorbereitung davor bindet nur Prüfer oder TEC.</li>
           <li>Planungspriorität 1 kommt zuerst. Innerhalb gleicher Priorität vergleicht das Programm viele Reihenfolgen und nimmt die beste.</li>
@@ -140,7 +147,7 @@ VIEWS.help = {
         <p class="small ink2">Ein Tag anklicken öffnet die Aufschlüsselung. Grenzwerte, Krankenreserve und die Zahl gleichzeitig verfügbarer Mentoren, TEC und Prüfer stellen Sie unter ${go('capacity', 'Kapazität')} ein. Im <b>Szenariomodus</b> wird ohne verbindliche Grenze verteilt – für die echte Planung gehört der Kapazitätsmodus eingeschaltet.</p></section>
 
       <section class="card" id="h-wege"><h2>8 · Cluster und Ausbildungswege</h2>
-        <p>Jede Person gehört zu einem Cluster. Der Cluster bestimmt den Ausbildungsweg: eine feste Folge von Schritten mit Dauer und dem, was der Produktion an einem solchen Tag fehlt.</p>
+        <p>Jede Person gehört zu einem Cluster. Der Cluster bestimmt den Ausbildungsweg: eine Folge von Schritten mit Dauer und dem, was der Produktion an einem solchen Tag fehlt.</p>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Cluster</th><th>Bedeutung</th><th>Weg in der Vorgabe</th></tr></thead><tbody>
           ${Core.ROUTE_CLUSTERS.map(k => html`<tr><td><b>${k}</b></td><td>${Core.CLUSTERS[k]}</td><td>${Core.DEFAULT_ROUTES[k].map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}${k === '5' ? html`<br><span class="muted">Zielstufe TEC:</span> ${sw('Theorie')} Theorie → ${sw('Praxis')} Praxis` : ''}${['3', '4B'].includes(k) ? html`<br><span class="muted">Voraussetzung: Praxis-Lehrgang</span>` : ''}</td></tr>`)}
           <tr><td><b>offen</b></td><td>${Core.CLUSTERS.offen}</td><td class="muted">wird nicht geplant, zählt aber in der Kapazität</td></tr>
@@ -148,7 +155,14 @@ VIEWS.help = {
         <ul class="h-list" style="margin-top:10px"><li>Cluster, Zielmuster und Zielstufe ändern Sie unter ${go('people', 'Personen & Cluster')} – oder Sie spielen eine Liste ein, die nur Personalnummer und Cluster enthält.</li>
           <li>Dauer und Verlust je Schritt stellen Sie unter ${go('routes', 'Ausbildungswege')} ein: für den ganzen Cluster oder abweichend für eine einzelne Person.</li>
           <li><b>Vorleistung:</b> Hat jemand einen Teil schon erbracht, tragen Sie die Tage in der Seitenleiste der Person ein. Der Planer verteilt dann nur den Rest.</li>
-          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul></section>
+          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul>
+        <h3>Reihenfolge, eigene Schritte und Dienste</h3>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Was</th><th>Wie</th></tr></thead><tbody>
+          <tr><td><b>Reihenfolge ändern</b></td><td>Unter ${go('routes', 'Ausbildungswege')} eine Schrittkarte am Kopf greifen und an die neue Stelle ziehen – oder die Pfeile ◀ ▶ auf der Karte nutzen. Der Planer hält die Reihenfolge ein.</td></tr>
+          <tr><td><b>Eigenen Schritt anlegen</b></td><td>„Neuen Schritt anlegen“: Bezeichnung, Kürzel, Farbe, Art (einzeln im Dienst oder Lehrgang als Block), zulässige Dienste, Dauer und Verlust. Der Schritt steht danach allen Clustern zur Auswahl.</td></tr>
+          <tr><td><b>Dienste je Maßnahme</b></td><td>In der Tabelle „Schritte und Dienste“ je Maßnahme ankreuzen, ob sie im Früh-, Spät- oder Nachtdienst stattfinden darf. Mindestens ein Dienst bleibt immer zugelassen.</td></tr>
+          <tr><td><b>Schritt entfernen</b></td><td>Eigene Schritte lassen sich entfernen, solange es keine Termine oder Lehrgänge dazu gibt.</td></tr></tbody></table></div>
+        <div class="note">Nach jeder Änderung an Reihenfolge, Schritten oder Diensten verteilt erst „Neu berechnen“ die berechneten Termine neu. Fixierte Termine bleiben stehen; liegen sie außerhalb der zugelassenen Dienste, steht das als Konflikt im Bericht.</div></section>
 
       <section class="card" id="h-jahre"><h2>9 · Mehrere Planungsjahre</h2>
         <p>Ein Projekt kann mehrere Planungsjahre enthalten; gewechselt wird in der Kopfzeile (aktuell ${y}). <b>„Folgejahr anlegen“</b> übernimmt Personen, Ausbildungswege, Grenzwerte und Einstellungen.</p>
@@ -185,12 +199,21 @@ VIEWS.help = {
           <li><b>Namen verbergen.</b> Die Schaltfläche in der Kopfzeile ersetzt überall Namen und Personalnummern durch Pseudonyme – für Besprechungen, Bildschirmfotos und Berichte.</li>
           <li><b>Pseudonymisiert sichern.</b> Erzeugt eine Projektdatei ohne Namen und eine getrennte Schlüsseldatei. Pseudonymisiert ist nicht anonym: die Schlüsseldatei gehört geschützt aufbewahrt.</li>
           <li><b>Dateinamen.</b> Dateien mit Personendaten tragen „VERTRAULICH“ im Namen.</li></ul>
+        <h3>Wer kann auf eingelesene Personendaten zugreifen?</h3>
+        <p>Das Programm überträgt nichts und hat keine eigene Anmeldung. Der Schutz der Daten hängt deshalb daran, wo die Dateien liegen und wer an den Rechner kommt:</p>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Wo liegen Daten?</th><th>Wer kann sie lesen?</th><th>Was tun?</th></tr></thead><tbody>
+          <tr><td>Im Programmfenster</td><td>Jeder, der auf den Bildschirm sieht oder am entsperrten Rechner sitzt</td><td>Rechner sperren; für Besprechungen „Namen verbergen“</td></tr>
+          <tr><td>Projektdatei${isDesktop ? html` <code>.m1cockpit</code> und Sicherungskopie <code>.bak</code>` : ''}</td><td>Jeder mit Zugriff auf den Ordner – auch über Netzlaufwerk, Datensicherung oder Administration. Die Datei ist <b>nicht verschlüsselt</b>.</td><td>In einem Ordner speichern, auf den nur Berechtigte zugreifen</td></tr>
+          ${isDesktop ? html`<tr><td>Wiederherstellungskopie (nur wenn eingeschaltet)</td><td>Jeder mit Zugriff auf Ihr Windows-Benutzerprofil</td><td>Ausgeschaltet lassen, wenn der Rechner geteilt wird</td></tr>` : ''}
+          <tr><td>Ausgaben (PDF, Excel, CSV)</td><td>Jeder, der die Datei erhält</td><td>Nur weitergeben, was nötig ist; sonst pseudonymisiert ausgeben</td></tr></tbody></table></div>
+        <p class="small ink2">Abwesenheitsgründe wie „Krank“ sind besonders schutzwürdig. Für die Planung genügt, dass eine Person abwesend ist: Beim Einspielen des Urlaubsplans können Sie solche Kürzel der Art „Sonstiges“ zuordnen. Ob und wie Personendaten in diesem Werkzeug verarbeitet werden dürfen, klären Sie mit Datenschutz und Mitbestimmung Ihres Betriebs.</p>
         ${go('data', 'Daten & Datenschutz')}</section>
 
       <section class="card" id="h-fragen"><h2>12 · Häufige Fragen</h2>
         ${faq('Eine Person bekommt keine Termine – warum?', html`Im ${go('report', 'Bericht')} steht je Person das Ergebnis mit Begründung. Häufige Gründe: Cluster offen, Zielmuster oder Zielstufe fehlen (Cluster 5), kein Lehrgangstermin vorhanden, kein Dienstplan, oder die Kapazität reicht an keinem passenden Tag.`)}
         ${faq('Der Urlaubsplan wurde eingespielt, aber einige Personen fehlen.', 'Die Vorschau nennt, wie viele Personen erkannt wurden und welche Zeilen übersprungen sind. Erkannt wird über die Personalnummer oder den Namen in einer Spalte vor den Tagen. Stimmen Schreibweisen nicht, hilft eine Spalte mit der Personalnummer.')}
         ${faq('Im Bericht stehen „Hinweise“ zu Lehrgängen. Ist das ein Problem?', 'Nein. „Dienstplananpassung“ heißt: Der Lehrgangstag wäre laut Dienstplan frei. Die Person kommt zum Lehrgang, der Produktion fehlt niemand – nur der Dienstplan ist anzupassen. Als Konflikt zählen Abwesenheit, Terminkollision und unterschrittene Kapazität.')}
+        ${faq('Ich sehe nach dem Start keine Daten.', html`Das ist der Normalbetrieb: Das Programm startet leer. Öffnen Sie Ihr Projekt${isDesktop ? ' (Datei → Öffnen, auch unter „Zuletzt geöffnet“)' : ''} oder spielen Sie Daten ein. Zum Ausprobieren schalten Sie unter ${go('data', 'Daten & Datenschutz')} den Übungsmodus ein.`)}
         ${isDesktop ? faq('Das Programm reagiert nicht mehr.', 'Nach einigen Sekunden erscheint die Frage „Weiter warten“ oder „Programm neu laden“. Die Stelle wird im Fehlerprotokoll festgehalten (Hilfe → Fehlerprotokoll anzeigen). Das Protokoll enthält keine Projektdaten – nur Zeitpunkt, Version, die zuletzt ausgelöste Aktion und die Stelle im Programmcode. Damit beim Neuladen nichts verloren geht, lässt sich unter „Daten & Datenschutz“ die Wiederherstellungskopie einschalten.') : ''}
         ${faq('Ich habe etwas falsch gemacht – wie komme ich zurück?', html`${kbd('Strg', 'Z')} oder der Pfeil in der Kopfzeile nimmt die letzten 30 Schritte zurück, auch das Laden einer Datei, das Entfernen simulierter Daten oder das Anlegen eines Jahres.`)}
         ${faq('Der Plan soll stehen bleiben, auch wenn ich neu berechne.', html`Unter ${go('events', 'Termine')} macht „Plan fixieren“ aus allen berechneten Terminen fixierte. Einzelne Termine fixieren Sie über „Fixieren“ oder indem Sie den Balken verschieben.`)}
@@ -204,7 +227,9 @@ VIEWS.help = {
           ${term('Szenario', 'Simulierter Termin oder Lehrgang aus der Erprobung. Wird mit „Simulierte Daten entfernen“ gelöscht.')}
           ${term('Lehrgang', 'Zusammenhängender Block für eine Gruppe mit Zeitraum und Plätzen: Theorie, Praxis, Basic Knowledge, FG650.')}
           ${term('Practical Logbook', 'Praktische Ausbildung im laufenden Dienst, tageweise mit Mentor.')}
-          ${term('FitCheck / ICA', 'Prüfungsschritte; liegen nur im Frühdienst. Vor der ICA liegt ein Tag Vorbereitung für Prüfer oder TEC.')}
+          ${term('FitCheck / ICA', 'Prüfungsschritte; in der Vorgabe nur im Frühdienst. Vor der ICA liegt ein Tag Vorbereitung für Prüfer oder TEC.')}
+          ${term('Übungsmodus', 'Füllt das leere Programm mit simulierten Daten zum Einarbeiten. Ein- und ausschaltbar unter „Daten & Datenschutz“.')}
+          ${term('Eigener Schritt', 'Eine selbst angelegte Maßnahme im Ausbildungsweg – einzeln im Dienst oder als Lehrgang.')}
           ${term('Kapazitätstag', 'Ein Kopf, der der Produktion einen Tag lang fehlt. Mentor 0,5 an 10 Tagen = 5 Kapazitätstage.')}
           ${term('Vorleistung', 'Bereits erbrachte Tage eines Schritts aus Vorjahren. Der Planer verteilt nur den Rest.')}
           ${term('Planungspriorität', '1 wird zuerst verteilt, 9 zuletzt. Entscheidet, wer bei knapper Kapazität zum Zug kommt.')}

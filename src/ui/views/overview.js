@@ -6,12 +6,13 @@ import { ACT, CHG, INP, VIEWS } from '../registry.js';
 import { yearCompareCard } from './years.js';
 import { go, render } from '../shell.js';
 import { areaKnown, capCells, capLegend, monthsRow } from './shared.js';
+import { emptyStart } from '../practice.js';
 
 // ---------- Übersicht ---------------------------------------------------------
 function buildHints() {
   const h = [], st = S.settings, add = (lvl, text, act) => h.push({ lvl, text, act });
   if (!S.people.length) { add('crit', 'Noch keine Personen geladen.', ['Stammdaten importieren', 'go', 'data']); return h; }
-  if (S.meta.dataClass === 'demo') add('info', 'Demo-Daten aktiv: alle Personen, Dienste und Abwesenheiten sind frei erfunden.', ['Eigene Daten laden', 'go', 'data']);
+  if (S.meta.dataClass === 'demo') add('info', 'Übungsmodus: alle Personen, Dienste und Abwesenheiten sind frei erfunden.', ['Übungsmodus beenden', 'practice-off', '']);
   const pl = (n, one, many) => nf(n) + ' ' + (n === 1 ? one : many);
   if (HARD) add('crit', pl(HARD, 'Termin mit Konflikt', 'Termine mit Konflikten') + ' (Abwesenheit, Dienst, Kollision oder Kapazität).', ['Zum Bericht', 'go', 'report']);
   if (SUM.underMin) add('crit', pl(SUM.underMin, 'Diensttag liegt', 'Diensttage liegen') + ' unter dem Minimum.', ['Kapazität ansehen', 'go', 'capacity']);
@@ -40,9 +41,7 @@ ACT['cluster-jump'] = t => { UI.cluster = t.dataset.id; go('people'); };
 ACT['cluster-year'] = t => { UI.cluster = t.dataset.id; go('year'); };
 VIEWS.overview = {
   render() {
-    if (!S.people.length) return html`<div class="view-head"><div><h1>Übersicht</h1></div></div>
-      <div class="card empty"><b>Dieses Projekt enthält noch keine Personen</b>Importieren Sie Stammdaten, laden Sie eine vorhandene Projektdatei oder sehen Sie sich das Werkzeug mit synthetischen Demo-Daten an.
-      <div class="row" style="justify-content:center;margin-top:14px"><button class="btn primary" data-act="go" data-id="data">Daten importieren</button><button class="btn" data-act="load-project">Datei laden</button><button class="btn" data-act="load-demo">Demo-Daten erzeugen</button></div></div>`;
+    if (!S.people.length) return emptyStart();
     const a = areaKnown(UI.capArea) ? UI.capArea : 0, ks = [0, 1, 2].map(s => a * 3 + s), r = SUM.route, n = IX.n;
     const wz = SUM.worstZero, schoolCells = raw(Array.from(IX.school, v => v ? '<i class="on"></i>' : '<i></i>').join(''));
     const seg = [['Vollständig geplant', r.complete, 'var(--good)', ''], ['Teilweise geplant', r.partial, 'var(--warn)', 'dark'], ['Ohne Termine', r.none, 'var(--crit)', ''], ['Cluster offen', r.unassigned, 'var(--t-other)', ''], ['Ausgeschlossen', r.locked, 'var(--line-2)', 'dark']].filter(x => x[1] > 0);
@@ -51,7 +50,7 @@ VIEWS.overview = {
     return html`
     <div class="view-head"><div><h1>Übersicht ${S.meta.year}</h1><p>${S.meta.source || 'Jahresplanung Qualifizierung und Kapazität'}</p></div><span class="sp"></span>
       <button class="btn noprint" data-act="print">Drucken</button></div>
-    ${S.meta.dataClass === 'demo' ? html`<div class="banner"><span><b>Sie sehen synthetische Demo-Daten.</b> Reale Stammdaten, Dienstpläne und Abwesenheiten laden Sie erst in Ihrer geschützten Umgebung – dieses Programm überträgt nichts.</span><span class="sp"></span><button class="btn sm" data-act="go" data-id="data">Daten & Datenschutz</button></div>` : ''}
+    ${S.meta.dataClass === 'demo' ? html`<div class="banner"><span><b>Übungsmodus: Sie sehen simulierte Daten.</b> Probieren Sie alles gefahrlos aus. Für die echte Planung beenden Sie den Übungsmodus – das Programm ist dann leer und Sie spielen Ihre Daten ein.</span><span class="sp"></span><button class="btn sm" data-act="practice-off">Übungsmodus beenden</button></div>` : ''}
     <div class="card" style="margin-bottom:14px">
       <div class="row" style="margin-bottom:10px"><h3 style="font-size:14.5px;font-weight:650">Jahresampel · Kapazität je Dienst und Tag</h3>
         ${[1, 2].some(areaKnown) ? html`<select data-chg="ui" data-f="capArea" aria-label="Bereich">${opts(Core.AREAS.map((x, i) => [i, x]), a)}</select>` : html`<span class="muted small">Bereich ${Core.AREAS[a]}</span>`}

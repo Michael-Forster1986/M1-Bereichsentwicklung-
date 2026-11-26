@@ -10,9 +10,7 @@ export const nf = (v, d = 0) => Number(v).toLocaleString('de-DE', { minimumFract
 export const sgn = (v, d = 1) => (v >= -0.049 ? '+' : '−') + nf(Math.abs(v), d);
 export const fmt = Core.fmtDE, fmtS = Core.fmtShort;
 export const dayLabel = d => WD[IX.cal.dow[d]] + '., ' + fmt(IX.cal.iso[d]);
-export const tcls = t => 't-' + String(t).replace(/[^A-Za-z0-9]/g, '');
-export const TSHORT = { 'Theorie': 'Theorie', 'Praxis': 'Praxis', 'Practical Logbook': 'Logbook', 'FitCheck': 'FitCheck', 'Vorbereitung': 'Vorb.', 'ICA': 'ICA', 'Basic Knowledge': 'Basic', 'FG650': 'FG650', 'Sonstiges': 'Sonst.' };
-export const LEGEND_TYPES = ['Theorie', 'Praxis', 'Practical Logbook', 'FitCheck', 'Vorbereitung', 'ICA', 'Basic Knowledge', 'FG650', 'Sonstiges'];
+export { LEGEND_TYPES, TSHORT, tcls } from './measure-labels.js';
 const tagged = (labels, cls) => Object.fromEntries(Object.keys(labels).map(k => [k, [labels[k], cls[k] || '']]));
 export const REPORT_STATUS = tagged(Core.REPORT_LABELS, { planned: 'good', kept: 'good', partial: 'warn', open: 'crit', blocked: 'crit' });
 export const ROUTE_STATE = tagged(Core.ROUTE_LABELS, { complete: 'good', partial: 'warn', none: 'crit' });

@@ -56,11 +56,27 @@ after(async () => { await shutdown(); fs.rmSync(TMP, { recursive: true, force: t
 
 test('startet als Desktop-Programm aus dem Programmpaket', async () => {
   assert.equal(page.url(), 'app://cockpit/index.html');
-  assert.match(await page.textContent('#main h1'), /^Übersicht \d{4}$/);
+  assert.equal(await page.textContent('#main h1'), 'Übersicht');
   assert.equal(await page.evaluate(() => window.m1desktop.info.ext), 'm1cockpit');
   assert.equal(await page.evaluate(() => typeof window.require + typeof window.process), 'undefinedundefined', 'kein Node.js in der Oberfläche');
   assert.equal(await title(), 'Unbenanntes Projekt – M1 Qualifikationscockpit');
   assert.match(await page.evaluate(() => navigator.language), /^de/, 'deutsche Oberfläche unabhängig von der Systemsprache');
+});
+
+test('Normalbetrieb startet leer; der Übungsmodus lädt simulierte Daten und bleibt gespeichert', async () => {
+  const settings = () => JSON.parse(fs.readFileSync(path.join(USER_DATA, 'einstellungen.json'), 'utf8'));
+  assert.equal(await page.locator('#rail [data-id="people"] .cnt').innerText(), '0', 'ohne Übungsmodus enthält das Programm keine Personen');
+  assert.match(await page.textContent('#startCard'), /Personen & Cluster[\s\S]*Urlaubsplan[\s\S]*Lehrgangstermine[\s\S]*Dienstplan/);
+  assert.match(await page.textContent('#top'), /Leeres Projekt/);
+  await page.click('[data-act="practice-on"]');
+  await waitFor(async () => /^Übersicht \d{4}$/.test(await page.textContent('#main h1')), 'simulierte Daten');
+  assert.match(await page.textContent('#top'), /Übungsmodus · simulierte Daten/);
+  assert.equal(await page.locator('#rail [data-id="people"] .cnt').innerText(), '141');
+  await waitFor(() => settings().practice === true, 'Schalter gespeichert');
+  await menu('go', 'data');
+  assert.equal(await page.isChecked('#practiceCard [data-chg="practice"]'), true);
+  assert.equal(await title(), 'Unbenanntes Projekt – M1 Qualifikationscockpit', 'Übungsdaten gelten nicht als ungespeicherte Arbeit');
+  await menu('go', 'overview');
 });
 
 test('baut keine Netzwerkverbindungen auf', async () => {
@@ -318,6 +334,57 @@ test('Ausbildungswege und Anleitung sind vollständig', async () => {
   assert.equal(await page.locator('.h-toc button').count(), 14);
 });
 
+test('Ausbildungswege: Reihenfolge per Ziehen, eigener Schritt und zulässige Dienste', async () => {
+  await menu('go', 'routes'); await page.waitForSelector('#msCard');
+  await page.click('.rt-card >> nth=1');                                     // Cluster 2: Logbook, FitCheck, ICA
+  const order = () => page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-sortable] .rt-step[data-step]')].map(x => x.dataset.step));
+  assert.deepEqual(await order(), ['Practical Logbook', 'FitCheck', 'ICA']);
+  // Kachel am Kopf greifen und vor die Nachbarkachel ziehen. Beide zuerst in den sichtbaren Bereich holen –
+  // auf kleinen Bildschirmen liegt der Ablauf sonst unterhalb oder rechts außerhalb des Fensters.
+  await page.evaluate(() => document.querySelector('.rt-step[data-step="FitCheck"]').scrollIntoView({ block: 'center', inline: 'start' }));
+  const grip = await page.locator('.rt-step[data-step="ICA"] .rt-sh b').boundingBox(), target = await page.locator('.rt-step[data-step="FitCheck"]').boundingBox();
+  const view = page.viewportSize() || await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  assert.ok(grip.x > 0 && grip.x + 8 < view.width && grip.y > 0 && grip.y < view.height, 'die Kachel liegt im sichtbaren Bereich');
+  await page.mouse.move(grip.x + 8, grip.y + grip.height / 2); await page.mouse.down();
+  await page.mouse.move(grip.x - 30, grip.y + 4, { steps: 4 }); await page.mouse.move(target.x + 20, target.y + 30, { steps: 8 });
+  await waitFor(() => page.evaluate(() => (document.querySelector('.rt-step.drop-before') || { dataset: {} }).dataset.step === 'FitCheck'), 'Marke an der Zielstelle');
+  await page.mouse.up();
+  await waitFor(async () => (await order())[1] === 'ICA', 'neue Reihenfolge');
+  assert.deepEqual(await order(), ['Practical Logbook', 'ICA', 'FitCheck']);
+  // mit dem Pfeil zurück
+  await page.click('[data-act="route-move"][data-t="ICA"][data-dir="1"]');
+  assert.deepEqual(await order(), ['Practical Logbook', 'FitCheck', 'ICA']);
+  // eigener Schritt: im Spätdienst zulässig, zwei Tage, gleich im Weg
+  await page.click('#msCard [data-act="measure-new"]'); await page.waitForSelector('#msName');
+  await page.fill('#msName', 'Human Factors'); await page.fill('#msShort', 'HF'); await page.check('#msS1'); await page.fill('#msDays', '2');
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await order()).includes('Human Factors'), 'eigener Schritt im Weg');
+  assert.deepEqual(await order(), ['Practical Logbook', 'FitCheck', 'ICA', 'Human Factors']);
+  assert.match(await page.locator('#msCard tr:has-text("Human Factors")').innerText(), /eigener Schritt/);
+  // zulässige Dienste einer festen Maßnahme ändern; der letzte Dienst lässt sich nicht abwählen
+  await page.click('#msCard input[data-t="FitCheck"][data-i="1"]');
+  await waitFor(async () => /Früh- und Spätdienst/.test(await page.locator('.rt-step[data-step="FitCheck"] .rt-kind').innerText()), 'Dienstregel auf der Schrittkarte');
+  await page.click('#msCard input[data-t="ICA"][data-i="0"]');
+  await waitFor(async () => /Mindestens ein Dienst/.test(await toastText()), 'letzter Dienst bleibt');
+  assert.equal(await page.isChecked('#msCard input[data-t="ICA"][data-i="0"]'), true);
+  // alles steht in der Projektdatei
+  const file = path.join(TMP, 'Wege.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit eigenem Schritt');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active];
+  assert.deepEqual(st.measures, [{ name: 'Human Factors', short: 'HF', color: 1, course: false }]);
+  assert.deepEqual(st.routes['2'], ['Practical Logbook', 'FitCheck', 'ICA', 'Human Factors']);
+  assert.deepEqual(st.settings.shifts, { 'FitCheck': [true, true, false], 'Human Factors': [true, true, false] });
+  assert.equal(st.config['2']['Human Factors'].days, 2);
+  // Neu berechnen plant den eigenen Schritt; er erscheint im Jahresplan in seiner Farbe
+  await page.click('#top [data-act="plan"]'); await page.selectOption('#planMode', '16'); await page.click('#planGo');
+  await page.waitForSelector('#planResult [data-act="m:apply"]', { timeout: 60000 });
+  await page.click('#planResult [data-act="m:apply"]');
+  await menu('go', 'year');
+  await waitFor(async () => (await page.locator('#gantt .bar.t-x1').count()) > 0, 'Balken des eigenen Schritts');
+  assert.ok(await page.locator('.pchip:has-text("HF")').count(), 'eigener Schritt lässt sich in den Jahresplan ziehen');
+});
+
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });
 
 test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', async () => {
@@ -413,4 +480,26 @@ test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreich
     await page.check('#updCard [data-chg="updates"]');
     assert.deepEqual(errors, []);
   } finally { server.close(); }
+});
+
+test('Übungsmodus ausschalten leert das Programm – auch nach einem Neustart', async () => {
+  const settings = () => JSON.parse(fs.readFileSync(path.join(USER_DATA, 'einstellungen.json'), 'utf8'));
+  const people = () => page.locator('#rail [data-id="people"] .cnt').innerText();
+  if (!app) await launch();
+  // Weiter oben wurde ein eigenes Projekt geöffnet – das beendet den Übungsmodus von selbst
+  assert.equal(settings().practice, false, 'das Öffnen eines eigenen Projekts beendet den Übungsmodus');
+  assert.equal(await people(), '0', 'der Neustart danach war leer');
+  await menu('act', 'practice-toggle');
+  await waitFor(async () => (await people()) === '141', 'simulierte Daten');
+  await waitFor(() => settings().practice === true, 'Schalter gespeichert');
+  await menu('act', 'practice-toggle');
+  await waitFor(async () => (await people()) === '0', 'leeres Programm');
+  await waitFor(() => settings().practice === false, 'Schalter gespeichert');
+  assert.equal(await page.textContent('#main h1'), 'Übersicht');
+  await shutdown();
+  await launch();
+  assert.equal(await page.textContent('#main h1'), 'Übersicht');
+  assert.equal(await people(), '0');
+  assert.match(await page.textContent('#top'), /Leeres Projekt/);
+  assert.deepEqual(errors, []);
 });

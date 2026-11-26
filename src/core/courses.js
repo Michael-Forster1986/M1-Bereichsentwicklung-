@@ -1,4 +1,5 @@
-import { EPS, PREP, isCourseType } from './constants.js';
+import { EPS, PREP } from './constants.js';
+import { isCourse, measureOf, shiftsOf } from './measures.js';
 import { num, uid } from './util.js';
 import { validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
@@ -87,9 +88,10 @@ export function courseAssess(st, ix, o) {
   issues.push(...ev.viol);
   res.pks = group;
   res.minMargin = Number.isFinite(ev.mm) ? ev.mm : null; res.zeroMargin = Number.isFinite(ev.zm) ? ev.zm : null;
+  const okShift = o.shiftType ? shiftsOf(st, o.shiftType) : [true, false, false];        // ohne Angabe der Art gilt die Vorgabe: Frühdienst
   for (const pk of group) {
     const i = ix.pi.get(pk);
-    for (const d of res.days) { const k = assign(ix, i, d); if (k < 0) res.adjust++; else if (k % 3 !== 0) res.offShift++; }
+    for (const d of res.days) { const k = assign(ix, i, d); if (k < 0) res.adjust++; else if (!okShift[k % 3]) res.offShift++; }
   }
   if (o.group === 'max' && group.length < Math.max(1, o.minGroup || 1)) issues.push({ cat: 'Gruppe zu klein', text: group.length + ' von mindestens ' + (o.minGroup || 1) });
   res.ok = issues.length === 0;
@@ -148,6 +150,8 @@ export const courseKey = c => c.type + '|' + c.title + '|' + c.start + '|' + c.e
  * Lehrgänge ohne Zielmuster (CAT-A-Kursrahmen) für alle übrigen Cluster. So landet niemand im Lehrgang einer anderen Gruppe.
  */
 export const courseTargetOf = p => p && p.cluster === '5' ? (p.target || '') : '';
+/** Zielmuster, das ein Lehrgang dieser Art für diese Person tragen muss. Eigene Schritte sind musterunabhängig. */
+export const courseAudience = (st, p, type) => measureOf(st, type) ? '' : courseTargetOf(p);
 /** Ein Lehrgangsplatz gilt als vergeben durch einen Lehrgangstermin, einen fixierten Termin der Art oder ausreichende Vorleistung. */
 const hasCoursePlace = (p, t, evs, need) => evs.some(e => e.type === t && (e.courseId || e.courseKind || !e.auto)) || (need > 0 && creditOf(p, t) >= need);
 
@@ -160,10 +164,10 @@ export function courseDemand(st, ix) {
   for (const p of st.people) {
     if (isLocked(p) || p.cluster === 'offen') continue;
     const route = routeOf(st, p) || [], cfg = cfgOf(st, p) || {}, evs = ix.evByPerson.get(p.pk) || [];
-    const need = new Map(route.filter(isCourseType).map(t => [t, false]));
+    const need = new Map(route.filter(t => isCourse(st, t)).map(t => [t, false]));
     if (['3', '4B'].includes(p.cluster) && !p.gate && !need.has('Praxis')) need.set('Praxis', true);
     for (const [t, prereq] of need) {
-      const target = courseTargetOf(p), key = t + '|' + target;
+      const target = courseAudience(st, p, t), key = t + '|' + target;
       let g = groups.get(key);
       if (!g) groups.set(key, g = { key, type: t, target, days: null, all: [], open: [], placed: [], prereq: 0 });
       const days = Number.isInteger(cfg[t]?.days) && cfg[t].days > 0 ? cfg[t].days : null;
@@ -200,7 +204,7 @@ export function courseCandidates(st, ix, c) {
 export function assessCourse(st, ix, c, pks, opt = {}) {
   const list = pks.filter(pk => ix.pi.has(pk)), taken = courseMembers(st, c.id).length, free = c.seats == null ? null : Math.max(0, c.seats - taken);
   const window = new Map(list.map(pk => [pk, courseWindow(st, ix, ix.people.get(pk), c.type)])), group = opt.group || 'max';
-  const o = { threshold: 'zero', freePolicy: 'adjust', ignoreReplaceable: true, avoidSchool: false, minGroup: 1, ...opt, group, pks: list, start: c.start, end: c.end, window,
+  const o = { threshold: 'zero', freePolicy: 'adjust', ignoreReplaceable: true, avoidSchool: false, minGroup: 1, ...opt, group, pks: list, start: c.start, end: c.end, window, shiftType: c.type,
     maxGroup: group === 'max' ? (free == null ? (opt.maxGroup || 0) : free) : 0 };
   if (group === 'max' && free === 0) return { ok: false, issues: [{ cat: 'Lehrgang', text: 'alle Plätze sind belegt' }], start: c.start, end: c.end, pks: [], asked: list.length, dropped: list.map(pk => ({ pk, cats: ['Platzzahl'] })), days: courseDayList(ix, c), minMargin: null, zeroMargin: null, adjust: 0, offShift: 0, school: 0, threshold: o.threshold, free };
   const res = courseAssess(st, ix, o);

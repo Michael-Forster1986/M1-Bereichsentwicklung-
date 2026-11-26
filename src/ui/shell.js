@@ -53,7 +53,7 @@ export function renderTop() {
   setHTML($('#top'), html`
     <div class="brand"><b>M1 Qualifikationscockpit</b><span>${S.meta.title}</span></div>
     ${yearSelect()}
-    <span class="pill" data-tip="${S.meta.dataClass === 'demo' ? 'Alle Personen, Dienstpläne und Abwesenheiten sind frei erfunden.' : S.meta.dataClass === 'real' ? 'Enthält Personendaten. Datei und Sicherungen nur im berechtigten Umfeld speichern.' : S.meta.dataClass === 'pseudo' ? 'Namen und Personalnummern sind durch Pseudonyme ersetzt.' : 'Noch keine Personen geladen.'}">${dc[0]}</span>
+    <span class="pill" ${S.meta.dataClass === 'demo' ? raw('data-act="go" data-id="data" style="cursor:pointer"') : ''} data-tip="${S.meta.dataClass === 'demo' ? 'Alle Personen, Dienstpläne und Abwesenheiten sind frei erfunden. Anklicken: zum Schalter des Übungsmodus.' : S.meta.dataClass === 'real' ? 'Enthält Personendaten. Datei und Sicherungen nur im berechtigten Umfeld speichern.' : S.meta.dataClass === 'pseudo' ? 'Namen und Personalnummern sind durch Pseudonyme ersetzt.' : 'Noch keine Personen geladen.'}">${S.meta.dataClass === 'demo' ? 'Übungsmodus · simulierte Daten' : dc[0]}</span>
     <span class="pill hide-s" data-tip="${cap ? 'Kapazität wird verbindlich geprüft: fehlende Tagesdaten blockieren die Planung.' : 'Szenariomodus: Termine werden ohne verbindliche Kapazitätsprüfung verteilt.'}">${cap ? 'Kapazitätsmodus' : 'Szenariomodus'}</span>
     <span class="sp"></span>
     <button class="btn primary" data-act="plan" data-tip="Jahresplanung berechnen und vor der Übernahme vergleichen">Neu berechnen</button>

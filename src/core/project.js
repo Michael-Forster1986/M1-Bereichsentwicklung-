@@ -1,4 +1,5 @@
-import { ABS_TYPES, AREAS, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS, TYPES, isCourseType } from './constants.js';
+import { ABS_TYPES, AREAS, COURSE_TYPES, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS } from './constants.js';
+import { courseTypesOf, isCourse, normMeasures, normShifts, typesOf } from './measures.js';
 import { clamp, fin, kOf, num, uid } from './util.js';
 import { makeCalendar, normDate, validDate } from './dates.js';
 import { defaultLimits, emptyState } from './defaults.js';
@@ -7,12 +8,12 @@ import { decodeRoster, encodeRoster, rosterCode } from './roster.js';
 import { buildIndex } from './indexing.js';
 
 // ---------- Laden, Prüfen, Altformat ------------------------------------
-function normEvent(e, known) {
+function normEvent(e, known, types) {
   if (!e || !known.has(String(e.pk))) return null;
   let dates = Array.isArray(e.dates) ? [...new Set(e.dates.filter(validDate))].sort() : null;
   const start = dates && dates.length ? dates[0] : normDate(e.start), end = dates && dates.length ? dates[dates.length - 1] : normDate(e.end);
   if (!start || !end || end < start) return null;
-  const out = { id: String(e.id || uid()), pk: String(e.pk), type: [...TYPES, 'Sonstiges'].includes(e.type) ? e.type : 'Sonstiges',
+  const out = { id: String(e.id || uid()), pk: String(e.pk), type: types.has(e.type) ? e.type : 'Sonstiges',
     auto: !!e.auto, start, end, trainee: clamp(num(e.trainee), 0, 5), mentor: clamp(num(e.mentor), 0, 5),
     tec: clamp(num(e.tec), 0, 5), examiner: clamp(num(e.examiner), 0, 5), target: String(e.target || '') };
   if (dates && dates.length) out.dates = dates;
@@ -23,9 +24,9 @@ function normEvent(e, known) {
   if (e.courseId) out.courseId = String(e.courseId).slice(0, 60);
   return out;
 }
-/** Prüft einen Lehrgangstermin (Art, Zeitraum, Plätze). */
-export function normCourse(c) {
-  if (!c || !isCourseType(c.type)) return null;
+/** Prüft einen Lehrgangstermin (Art, Zeitraum, Plätze). types = Maßnahmen, die als Lehrgang stattfinden. */
+export function normCourse(c, types = COURSE_TYPES) {
+  if (!c || !types.includes(c.type)) return null;
   const start = normDate(c.start), end = normDate(c.end);
   if (!start || !end || end < start) return null;
   const seats = Math.round(num(c.seats));
@@ -40,7 +41,7 @@ export function linkCourses(st) {
   const ids = new Set(st.courses.map(c => c.id)), byKey = new Map(st.courses.map(c => [c.type + '|' + c.title + '|' + c.start + '|' + c.end, c]));
   for (const e of st.events) {
     if (e.courseId && !ids.has(e.courseId)) delete e.courseId;
-    if (e.courseId || !e.courseKind || !isCourseType(e.type) || !e.title) continue;
+    if (e.courseId || !e.courseKind || !isCourse(st, e.type) || !e.title) continue;
     const key = e.type + '|' + e.title + '|' + e.start + '|' + e.end;
     let c = byKey.get(key);
     if (!c) { c = { id: uid(), type: e.type, title: e.title, target: '', start: e.start, end: e.end, seats: null, fixed: true }; st.courses.push(c); byKey.set(key, c); ids.add(c.id); }
@@ -56,15 +57,17 @@ export function sanitize(x) {
     source: String(x.meta?.source || '').slice(0, 300), created: x.meta?.created || st.meta.created, privacy: !!x.meta?.privacy,
     simulated: { roster: !!x.meta?.simulated?.roster, absences: !!x.meta?.simulated?.absences },
     assumptions: Array.isArray(x.meta?.assumptions) ? x.meta.assumptions.map(a => String(a).slice(0, 300)).slice(0, 30) : [] });
+  st.measures = normMeasures(x.measures);
+  const types = typesOf(st), typeSet = new Set([...types, 'Sonstiges']);
   const seen = new Set();
   for (const p of Array.isArray(x.people) ? x.people : []) {
-    const np = normPerson(p || {});
+    const np = normPerson(p || {}, types);
     if (!np.pk || seen.has(np.pk)) { warnings.push('Person ohne oder mit doppelter Personalnummer übersprungen'); continue; }
     seen.add(np.pk); st.people.push(np);
   }
   assignAliases(st.people);
   const before = (x.events || []).length;
-  st.events = (Array.isArray(x.events) ? x.events : []).map(e => normEvent(e, seen)).filter(Boolean);
+  st.events = (Array.isArray(x.events) ? x.events : []).map(e => normEvent(e, seen, typeSet)).filter(Boolean);
   if (st.events.length !== before) warnings.push((before - st.events.length) + ' ungültige Termine übersprungen');
   st.absences = (Array.isArray(x.absences) ? x.absences : []).filter(a => a && seen.has(String(a.pk)) && validDate(a.start) && validDate(a.end) && a.end >= a.start)
     .map(a => ({ pk: String(a.pk), type: ABS_TYPES.includes(a.type) ? a.type : 'Sonstiges', start: a.start, end: a.end, ...(a.synthetic ? { synthetic: true } : {}) }));
@@ -76,8 +79,8 @@ export function sanitize(x) {
   if (x.roster && typeof x.roster === 'object' && !Array.isArray(x.roster)) for (const [pk, s] of Object.entries(x.roster)) if (seen.has(pk) && typeof s === 'string') st.roster[pk] = encodeRoster(decodeRoster(s, n));
   for (const a of AREAS) for (const s of SHIFTS) { const l = x.limits?.[a]?.[s]; if (l) st.limits[a][s] = { min: fin(l.min) && l.min >= 0 ? l.min : null, zero: fin(l.zero) && l.zero >= 0 ? l.zero : null }; }
   for (const k of ROUTE_CLUSTERS) {
-    for (const t of TYPES) if (x.config?.[k]?.[t]) st.config[k][t] = normCfg(x.config[k][t]);
-    if (Array.isArray(x.routes?.[k])) st.routes[k] = TYPES.filter(t => x.routes[k].includes(t));
+    for (const t of types) if (x.config?.[k]?.[t] || !st.config[k][t]) st.config[k][t] = normCfg(x.config?.[k]?.[t]);
+    if (Array.isArray(x.routes?.[k])) st.routes[k] = [...new Set(x.routes[k].filter(t => types.includes(t)))];   // die Reihenfolge legt der Mensch fest
   }
   const S = st.settings, xs = x.settings || {};
   if (validDate(xs.start) && xs.start.startsWith(String(year))) S.start = xs.start;
@@ -90,10 +93,11 @@ export function sanitize(x) {
   S.buffer = fin(xs.buffer) ? clamp(xs.buffer, 0, 50) : 0;
   S.hours = fin(xs.hours) && xs.hours > 0 && xs.hours <= 24 ? xs.hours : 7.5;
   S.courseBlocks = xs.courseBlocks !== false;
+  S.shifts = normShifts(xs.shifts, [...types, 'Sonstiges']);
   if (Array.isArray(xs.sick) && xs.sick.length === 12 && xs.sick.every(v => fin(v) && v >= 0 && v <= 50)) S.sick = xs.sick.slice();
   st.report = (Array.isArray(x.report) ? x.report : []).filter(r => r && seen.has(String(r.pk))).map(r => ({ pk: String(r.pk), status: String(r.status || 'open'), reason: String(r.reason || '').slice(0, 400), ...(Array.isArray(r.remaining) ? { remaining: r.remaining.map(String) } : {}) }));
   st.planInfo = x.planInfo && typeof x.planInfo === 'object' ? { at: String(x.planInfo.at || ''), mode: String(x.planInfo.mode || ''), variant: String(x.planInfo.variant || ''), tried: num(x.planInfo.tried) } : null;
-  { const seenC = new Set(); st.courses = (Array.isArray(x.courses) ? x.courses : []).map(normCourse).filter(c => c && !seenC.has(c.id) && seenC.add(c.id)); }
+  { const seenC = new Set(); const ct = courseTypesOf(st); st.courses = (Array.isArray(x.courses) ? x.courses : []).map(c => normCourse(c, ct)).filter(c => c && !seenC.has(c.id) && seenC.add(c.id)); }
   linkCourses(st);
   st.realImports = (Array.isArray(x.realImports) ? x.realImports : []).map(r => ({ kind: String(r.kind || ''), start: String(r.start || ''), end: String(r.end || ''), file: String(r.file || '').slice(0, 160), at: String(r.at || '') }));
   return { state: st, warnings };

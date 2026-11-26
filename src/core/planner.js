@@ -1,9 +1,10 @@
-import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS, isCourseType } from './constants.js';
+import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS } from './constants.js';
+import { isCourse, shiftsOf } from './measures.js';
 import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
-import { courseTargetOf } from './courses.js';
+import { courseAudience } from './courses.js';
 
 // ---------- Planer -----------------------------------------------------
 /**
@@ -33,6 +34,7 @@ export function runPlan(st, ix, opt = {}) {
     for (const x of st.courses) { const ds = []; for (let d = Math.max(0, cal.idx(x.start)), b = Math.min(n - 1, cal.idx(x.end)); d <= b; d++) if (ix.work[d]) ds.push(d); courseDays.set(x.id, ds); }
     for (const e of keep) if (e.courseId) seatUse.set(e.courseId, (seatUse.get(e.courseId) || 0) + 1);
   }
+  const prepShifts = shiftsOf(st, PREP);               // Dienste, in denen der Vorbereitungstag vor einer ICA liegen darf
   let mode = S.goal;                                    // aktuell geprüfte Grenze: 'zero' oder 'min'
   const buf = Math.max(0, num(S.buffer));              // Planungspuffer in Köpfen über der Grenze
   const thr = (k, d) => (mode === 'zero' ? cap.zero[k][d] : cap.min[k][d]) + buf;
@@ -105,11 +107,11 @@ export function runPlan(st, ix, opt = {}) {
         if (!c || !Number.isInteger(c.days) || c.days < 1 || c.trainee == null) { reason = 'Dauer oder Produktivitätsverlust fehlt: ' + t; hardFail = true; break; }
         const fs = fixed.filter(e => e.type === t), count = fs.reduce((s, e) => s + dayCount(e), 0) + creditOf(p, t);   // Vorleistung aus Vorjahren zählt wie fixierte Tage
         for (const e of fs) cursor = Math.max(cursor, endIdx(e) + 1);
-        const course = blocks && isCourseType(t);
+        const course = blocks && isCourse(st, t);
         if (course && fs.some(e => e.courseId || e.courseKind)) continue;      // Teilnahme an einem Lehrgang erfüllt den Schritt
         if (count >= c.days) continue;
         if (course) {
-          const sum = c.trainee + c.mentor + c.tec + c.examiner, offers = st.courses.filter(x => x.type === t && (x.target || '') === courseTargetOf(p)), why = new Map();
+          const sum = c.trainee + c.mentor + c.tec + c.examiner, aud = courseAudience(st, p, t), offers = st.courses.filter(x => x.type === t && (x.target || '') === aud), why = new Map();
           const obstacle = x => {
             const ds = courseDays.get(x.id) || [];
             if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
@@ -128,11 +130,11 @@ export function runPlan(st, ix, opt = {}) {
           if (!hit) {
             failed = true;
             reason = offers.length ? 'Kein passender Lehrgangstermin für ' + t + ' (' + [...why].sort((a, b) => b[1] - a[1]).map(x => x[0]).join(', ') + ')'
-              : 'Kein Lehrgangstermin für ' + t + (courseTargetOf(p) ? ' ' + courseTargetOf(p) : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
+              : 'Kein Lehrgangstermin für ' + t + (aud ? ' ' + aud : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
             remaining = [t + ': Lehrgang'];
             for (let q = r + 1; q < route.length; q++) {
               const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);
-              if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (isCourseType(route[q]) ? 'Lehrgang' : (c2.days - have) + ' Tage'));
+              if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (isCourse(st, route[q]) ? 'Lehrgang' : (c2.days - have) + ' Tage'));
             }
             break;
           }
@@ -155,15 +157,22 @@ export function runPlan(st, ix, opt = {}) {
           for (const e of fixed) if (GATE_TYPES.has(e.type)) gate = Math.max(gate, endIdx(e));
           for (const e of local) if (GATE_TYPES.has(e.type)) gate = Math.max(gate, endIdx(e));
           if (cursor <= gate) cursor = gate + 1;
+          // Vor einer neu geplanten ICA liegt ein Tag Vorbereitung. Steht die ICA am Anfang (als erster Schritt des Wegs oder
+          // weil alles davor schon erbracht ist), beginnt sie frühestens nach dem ersten dafür möglichen Diensttag.
+          if (!route.includes(PREP) && !fixed.some(e => e.type === PREP) && !local.some(e => e.type === PREP)) {
+            let first = -1;
+            for (let d = 0; d < n && first < 0; d++) { if (!ix.work[d] || ix.abs[i][d]) continue; const k = assign(ix, i, d); if (k >= 0 && prepShifts[k % 3]) first = d; }
+            if (first >= 0 && cursor <= first) cursor = first + 1;
+          }
         }
-        const sum = c.trainee + c.mentor + c.tec + c.examiner, ds = [], dayAreas = {};
+        const sum = c.trainee + c.mentor + c.tec + c.examiner, ds = [], dayAreas = {}, sh = shiftsOf(st, t);
         const scan = () => {
           for (let d = Math.max(0, cursor); d < n && ds.length < need; d++) {
             if (!ix.work[d] || ix.abs[i][d] || o[d] || (S.avoidSchool && ix.school[d])) continue;
             let k = assign(ix, i, d);
             if (k < 0) continue;
             if (rot) { const j = ds.length + count, a = j < rot[0] ? 0 : j < rot[0] + rot[1] ? 1 : 2; k = a * 3 + k % 3; }
-            if (t !== LOGBOOK && k % 3 !== 0) continue;              // Kurs-/Prüfungstage nur im Frühdienst
+            if (!sh[k % 3]) continue;                                  // nur in den für diese Maßnahme zulässigen Diensten (Vorgabe: Frühdienst, Logbook überall)
             if (!fits(k, d, c, sum)) continue;
             ds.push(d); o[d] = 1;
             if (rot) dayAreas[cal.iso[d]] = AREAS[(k / 3) | 0];
@@ -201,7 +210,7 @@ export function runPlan(st, ix, opt = {}) {
           for (let d = span.get(ica.id)[0] - 1; d >= 0 && !prep; d--) {
             if (!ix.work[d] || ix.abs[i][d]) continue;
             const k = assign(ix, i, d);
-            if (k < 0 || k % 3 !== 0) continue;
+            if (k < 0 || !prepShifts[k % 3]) continue;
             if (tec && S.tecLimit != null && L.tec[k][d] + tec > S.tecLimit + EPS) continue;
             if (exam && S.examinerLimit != null && L.exam[k][d] + exam > S.examinerLimit + EPS) continue;
             if (S.cap && (!cap.known[k][d] || cap.pre[k][d] - L.loss[k][d] - 1 < thr(k, d) - EPS)) continue;

@@ -18,7 +18,8 @@ export function normShift(v) {
   if (['', '-', 'x', 'off', 'frei', 'free', '/', '0'].includes(s)) return 'Frei';
   return null;
 }
-export function normPerson(p) {
+/** types = Maßnahmenarten des Projekts (feste und eigene Schritte). */
+export function normPerson(p, types = TYPES) {
   const cluster = parseCluster(p.cluster) || 'offen';
   const out = {
     pk: String(p.pk ?? '').trim(), name: String(p.name ?? '').trim(), alias: String(p.alias ?? '').trim(),
@@ -35,11 +36,11 @@ export function normPerson(p) {
   if (Array.isArray(p.rotation) && p.rotation.length === 3) out.rotation = p.rotation.map(v => clamp(Math.round(num(v)), 0, 260));
   if (p.customRoute && Array.isArray(p.customRoute.steps) && p.customRoute.config) {
     const cfg = {};
-    for (const t of TYPES) cfg[t] = normCfg(p.customRoute.config[t]);
-    out.customRoute = { steps: TYPES.filter(t => p.customRoute.steps.includes(t)), config: cfg };
+    for (const t of types) cfg[t] = normCfg(p.customRoute.config[t]);
+    out.customRoute = { steps: [...new Set(p.customRoute.steps.filter(t => types.includes(t)))], config: cfg };   // die Reihenfolge legt der Mensch fest
   }
   if (p.targetAssumed) out.targetAssumed = true;
-  const credit = normCredit(p.credit);
+  const credit = normCredit(p.credit, types);
   if (credit) out.credit = credit;
   return out;
 }
@@ -49,10 +50,10 @@ export const normCfg = c => ({
   mentor: c ? clamp(num(c.mentor), 0, 5) : 0, tec: c ? clamp(num(c.tec), 0, 5) : 0, examiner: c ? clamp(num(c.examiner), 0, 5) : 0
 });
 /** Vorleistung: bereits erbrachte Tage je Maßnahme aus Vorjahren ({ Maßnahme: Tage }); null, wenn keine. */
-export function normCredit(c) {
+export function normCredit(c, types = TYPES) {
   if (!c || typeof c !== 'object') return null;
   const out = {};
-  for (const t of TYPES) { const v = Math.round(num(c[t])); if (v > 0) out[t] = clamp(v, 1, 999); }
+  for (const t of types) { const v = Math.round(num(c[t])); if (v > 0) out[t] = clamp(v, 1, 999); }
   return Object.keys(out).length ? out : null;
 }
 /** Bereits erbrachte Tage einer Person für eine Maßnahme. */

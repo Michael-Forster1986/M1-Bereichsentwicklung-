@@ -4,6 +4,7 @@ import { $, html, raw } from '../dom.js';
 import { DATA_CLASS, fmt, fmtS, nf, opts, pill } from '../format.js';
 import { desktop, isDesktop } from '../../platform/desktop.js';
 import { updateCard } from '../update.js';
+import { practiceCard } from '../practice.js';
 import { DOC, HARD, IX, PRJ, S, SUM, autosaveOn, clearAutosave, commit, commitProject, privacy, projectClass, resetAll, setAutosave, years } from '../state.js';
 import { recentFiles } from '../project-files.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
@@ -237,6 +238,7 @@ VIEWS.data = {
       <div class="kpi"><div class="l">Kapazität</div><div class="v">${nf(SUM.knownDays)}</div><div class="s">prüfbare Diensttage · ${S.capacity.length ? 'Tageswerte' : 'aus Dienstplan'}</div></div>
       <div class="kpi"><div class="l">Kalender</div><div class="v">${nf(S.holidays.length)}</div><div class="s">Feiertage · ${nf(S.school.length)} Ferienzeiträume</div></div>
     </div>
+    ${practiceCard()}
     ${S.people.length ? liveCard() : ''}
     <div class="card" style="margin-bottom:14px"><h3>1 · Vorhandenen Stand übernehmen</h3><div class="sub">Der schnellste Weg von der Vorgängerversion: deren HTML-Datei oder JSON-Sicherung direkt laden – Personen, Dienstplan, Abwesenheiten, Termine, Wege und Einstellungen kommen vollständig mit.</div>
       <div class="row"><button class="btn primary" data-act="load-project">${isDesktop ? 'Projekt oder Vorgänger-Datei öffnen' : 'Projektdatei oder Vorgänger-Datei laden'}</button><span class="small muted">Formate: Projektdatei (.m1cockpit, .json) · Einzeldatei-Fassung als .json oder .html · „M1 Jahressimulation“ 3.x als .html oder .json</span></div>
@@ -271,7 +273,7 @@ VIEWS.data = {
       <div class="card"><h3>Datenschutz in diesem Programm</h3><div class="sub">Technisch abgesichert, nicht nur zugesagt</div>
         <ul class="hints">
           <li><span class="ic good">✓</span><span><b>Keine Übertragung.</b> ${isDesktop ? 'Die Oberfläche baut keine Netzwerkverbindungen auf: eine Inhaltsrichtlinie und eine Sperre im Programm weisen alles außer den eigenen Programmdateien ab. Es gibt keine externen Bibliotheken, Schriften oder Zähler. Die einzige Verbindung nach außen ist die Suche nach einer neuen Programmversion (Karte „Programm-Aktualisierung“); dabei wird nichts aus dem Programm übertragen, und sie lässt sich abschalten.' : 'Eine Inhaltsrichtlinie in der Datei sperrt jede Netzwerkverbindung; es gibt keine externen Bibliotheken, Schriften oder Zähler.'}</span></li>
-          <li><span class="ic good">✓</span><span><b>Keine eingebetteten Personen.</b> ${isDesktop ? 'Das Programm' : 'Die Programmdatei'} enthält nur Logik und Vorgabewerte. Demo-Daten werden beim Start zufällig erzeugt.</span></li>
+          <li><span class="ic good">✓</span><span><b>Keine eingebetteten Personen.</b> ${isDesktop ? 'Das Programm' : 'Die Programmdatei'} enthält nur Logik und Vorgabewerte und startet leer. Die Daten des Übungsmodus werden zufällig erzeugt.</span></li>
           <li><span class="ic ${privacy() ? 'good' : ''}">${privacy() ? '✓' : 'i'}</span><span class="grow"><b>Namen verbergen.</b> Zeigt überall Pseudonyme statt Namen und Personalnummern – für Besprechungen und Bildschirmfotos.</span><button class="btn sm ${privacy() ? 'on' : ''}" data-act="toggle-privacy">${privacy() ? 'Namen zeigen' : 'Namen verbergen'}</button></li>
           <li><span class="ic ${on ? 'warn' : 'good'}">${on ? '!' : '✓'}</span><span class="grow">${isDesktop ? html`<b>Wiederherstellungskopie.</b> Standardmäßig aus: außerhalb Ihrer Projektdateien bleibt nichts zurück. Eingeschaltet liegt bei ungespeicherten Änderungen eine Kopie des Stands im Benutzerprofil dieses Rechners und wird nach einem Absturz angeboten.` : html`<b>Zwischenspeichern im Browser.</b> Standardmäßig aus: nichts bleibt nach dem Schließen zurück. Eingeschaltet liegt der Stand im Browserprofil dieses Rechners.`}</span><label class="c small nowrap"><input type="checkbox" data-chg="autosave" ${on ? raw('checked') : ''}> einschalten</label></li>
           ${isDesktop ? html`<li><span class="ic ${desktop.settings.get('backups') ? '' : 'good'}">${desktop.settings.get('backups') ? 'i' : '✓'}</span><span class="grow"><b>Sicherungskopie beim Speichern.</b> Vor dem Überschreiben bleibt der vorherige Stand als Datei mit der Endung .bak neben der Projektdatei erhalten. Die Kopie enthält dieselben Personendaten wie die Projektdatei.</span><label class="c small nowrap"><input type="checkbox" data-chg="backups" ${desktop.settings.get('backups') ? raw('checked') : ''}> anlegen</label></li>` : ''}
@@ -283,6 +285,6 @@ VIEWS.data = {
     ${yearsCard()}
     <div class="card"><h3>Projekt</h3><div class="sub">Planungsjahr ${S.meta.year} · erstellt ${fmt(String(S.meta.created).slice(0, 10))}${S.meta.source ? ' · ' + S.meta.source : ''}</div>
       <div class="row"><label class="f" style="min-width:280px">Projekttitel<input type="text" data-chg="meta" value="${S.meta.title}" maxlength="120"></label><span class="sp"></span>
-        <button class="btn" data-act="load-demo">Demo-Daten erzeugen</button><button class="btn" data-act="new-empty">Leeres Projekt anlegen</button></div></div>`;
+        <button class="btn" data-act="new-empty">Leeres Projekt anlegen</button></div></div>`;
   }
 };

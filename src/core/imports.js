@@ -1,4 +1,5 @@
-import { ABS_TYPES, AREAS, COURSE_TYPES, PATTERNS, PREP, SHIFTS, TARGETS, TYPES } from './constants.js';
+import { ABS_TYPES, AREAS, COURSE_TYPES, PATTERNS, PREP, SHIFTS, TARGETS } from './constants.js';
+import { courseTypesOf, typesOf } from './measures.js';
 import { clamp, num, truthy, uid } from './util.js';
 import { addDays, fmtDE, makeCalendar, normDate } from './dates.js';
 import { assignAliases, normPerson, parseCluster, normShift } from './people.js';
@@ -30,7 +31,7 @@ export function applyPeople(st, chk, mode) {
   const next = [];
   for (const r of chk.rows) {
     const pk = String(r.pk).trim(), old = byPk.get(pk);
-    if (!old) { next.push(normPerson(r)); info.added++; continue; }
+    if (!old) { next.push(normPerson(r, typesOf(st))); info.added++; continue; }
     const merged = { ...old };
     for (const f of fields) {
       if (f === 'pk') continue;
@@ -46,7 +47,7 @@ export function applyPeople(st, chk, mode) {
         }
       } else merged[f] = r[f];
     }
-    const np = normPerson(merged); np.alias = old.alias;
+    const np = normPerson(merged, typesOf(st)); np.alias = old.alias;
     if (!fields.has('locked')) np.locked = old.locked || np.cluster === 'ausgeschlossen';
     next.push(np); info.updated++;
     byPk.delete(pk);
@@ -175,7 +176,7 @@ export function checkEvents(st, objs, head) {
     if (!pk) return;
     if (!known.has(pk)) return errors.push(line + 'unbekannte Personalnummer');
     if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
-    const type = [...TYPES, 'Sonstiges'].find(t => t.toLowerCase() === String(r.type).trim().toLowerCase());
+    const type = [...typesOf(st), 'Sonstiges'].find(t => t.toLowerCase() === String(r.type).trim().toLowerCase());
     if (!type) return errors.push(line + 'Maßnahme unbekannt (' + r.type + ')');
     const f = (k, def) => { const v = String(r[k] ?? '').trim(); return v === '' ? def : clamp(num(v.replace(',', '.')), 0, 5); };
     rows.push({ id: uid(), pk, type, title: String(r.title || '').trim() || undefined, start: s, end: e, auto: false,
@@ -186,10 +187,10 @@ export function checkEvents(st, objs, head) {
 
 // ---------- Lehrgangstermine ----------------------------------------------------
 /** Ordnet eine frei geschriebene Lehrgangsart (z. B. „TEC“, „CAT A“, „CAT Praxis“) einer Maßnahme des Ausbildungswegs zu. */
-export function courseTypeOf(text) {
+export function courseTypeOf(text, st = null) {
   const s = normHead(text);
   if (!s) return '';
-  for (const t of COURSE_TYPES) if (normHead(t) === s) return t;
+  for (const t of st ? courseTypesOf(st) : COURSE_TYPES) if (normHead(t) === s) return t;
   if (s.includes('prax') || s.includes('practical')) return 'Praxis';
   if (s.includes('basic') || s === 'bk') return 'Basic Knowledge';
   if (s.includes('fg650')) return 'FG650';
@@ -211,7 +212,7 @@ export function checkCourses(st, objs, head) {
     const s = normDate(r.start), e = normDate(r.end);
     if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
     if (!title) return errors.push(line + 'Bezeichnung oder Art fehlt');
-    const type = courseTypeOf(rawType || title), want = String(r.target ?? '').trim().toLowerCase();
+    const type = courseTypeOf(rawType || title, st), want = String(r.target ?? '').trim().toLowerCase();
     const target = TARGETS.find(t => t.toLowerCase() === want) || TARGETS.find(t => !t.includes(' ') && title.toUpperCase().includes(t)) || '';
     const key = type + '|' + title + '|' + s + '|' + e;
     let c = map.get(key);

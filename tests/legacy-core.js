@@ -21,6 +21,9 @@ export function normalizeState(st) {
   // Felder, die es in der Einzeldatei-Fassung noch nicht gab
   if (Array.isArray(c.courses) && !c.courses.length) delete c.courses;
   if (c.settings) delete c.settings.courseBlocks;
+  // eigene Schritte und abweichende Dienstregeln kennt die Einzeldatei nicht; leer entsprechen sie ihrem Verhalten
+  if (Array.isArray(c.measures) && !c.measures.length) delete c.measures;
+  if (c.settings && c.settings.shifts && !Object.keys(c.settings.shifts).length) delete c.settings.shifts;
   return c;
 }
 export const normalizeEvents = evs => evs.map((e, i) => ({ ...e, id: 'E' + i }));
