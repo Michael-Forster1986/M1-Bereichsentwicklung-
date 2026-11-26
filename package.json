@@ -1,0 +1,115 @@
+{
+  "name": "m1-qualifikationscockpit",
+  "productName": "M1 Qualifikationscockpit",
+  "version": "5.0.0",
+  "description": "Jahresplanung von Qualifikationsmaßnahmen mit Kapazitätsprüfung – Desktop-Programm",
+  "author": "M1 Bereichsentwicklung",
+  "homepage": "https://github.com/Michael-Forster1986/M1-Bereichsentwicklung-",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:app && npm run build:html",
+    "build:app": "vite build",
+    "build:html": "vite build --mode standalone && node scripts/finish-standalone.mjs",
+    "start": "npm run build && electron .",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "e2e": "npm run build && node --test e2e/desktop.test.mjs",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "dist:dir": "npm run build && electron-builder --dir --publish never"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "playwright-core": "^1.65.1",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.2"
+  },
+  "build": {
+    "appId": "de.m1.qualifikationscockpit",
+    "productName": "M1 Qualifikationscockpit",
+    "copyright": "M1 Bereichsentwicklung",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      "dist/app/**",
+      "dist/standalone/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": null,
+    "electronLanguages": [
+      "de",
+      "en-US"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "m1cockpit",
+        "name": "M1-Cockpit-Projekt",
+        "description": "M1 Qualifikationscockpit – Projekt",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "de_DE"
+      ],
+      "language": "1031",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "M1 Qualifikationscockpit",
+      "uninstallDisplayName": "M1 Qualifikationscockpit",
+      "artifactName": "M1-Qualifikationscockpit-${version}-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "M1-Qualifikationscockpit-${version}-portable.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "M1-Qualifikationscockpit-${version}.${ext}"
+    }
+  }
+}

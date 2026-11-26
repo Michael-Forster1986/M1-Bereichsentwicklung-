@@ -1,0 +1,71 @@
+name: Programm prüfen und bauen
+
+# Prüft jeden Stand (Regeln, Rechenkern, Desktop-Programm im Fenster) und baut danach
+# das Windows-Programm. Die fertigen Dateien hängen als Artefakte am jeweiligen Lauf.
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruefen:
+    name: Tests und Einzeldatei (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Regeln prüfen
+        run: npm run lint
+      - name: Rechenkern prüfen (inkl. Vergleich mit der ursprünglichen HTML-Fassung)
+        run: npm test
+      - name: Oberfläche bauen
+        run: npm run build
+      - name: Desktop-Programm im Fenster prüfen
+        run: xvfb-run -a node --test e2e/desktop.test.mjs
+      - name: Einzeldatei für den Browser bereitstellen
+        uses: actions/upload-artifact@v7
+        with:
+          name: M1-Qualifikationscockpit-Einzeldatei-HTML
+          path: dist/standalone/M1_Qualifikationscockpit.html
+          if-no-files-found: error
+
+  windows:
+    name: Windows-Programm (Installer und portable .exe)
+    needs: pruefen
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Oberfläche bauen
+        run: npm run build
+      - name: Programm packen
+        run: npx electron-builder --win --x64 --publish never
+      - name: Fertiges Programm im Fenster prüfen
+        shell: pwsh
+        run: |
+          $env:M1_APP = (Resolve-Path "release/win-unpacked/M1 Qualifikationscockpit.exe").Path
+          node --test e2e/desktop.test.mjs
+      - name: Installer und portable .exe bereitstellen
+        uses: actions/upload-artifact@v7
+        with:
+          name: M1-Qualifikationscockpit-Windows
+          path: release/*.exe
+          if-no-files-found: error
