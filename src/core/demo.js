@@ -5,9 +5,11 @@ import { normPerson } from './people.js';
 import { encodeRoster } from './roster.js';
 import { buildIndex } from './indexing.js';
 import { mulberry, optimizePlan } from './planner.js';
+import { courseDemand, memberEvent, proposeCourses } from './courses.js';
 
 // ---------- Synthetische Demo-Daten -------------------------------------
-export function demoState({ year = 2027, count = 141, seed = 2027 } = {}) {
+/** courseBlocks = false erzeugt den Datensatz der Einzeldatei-Fassung (Kurse als einzelne Tage) – Maßstab der Vergleichstests. */
+export function demoState({ year = 2027, count = 141, seed = 2027, courseBlocks = true } = {}) {
   const st = emptyState(year), rnd = mulberry(seed), cal = makeCalendar(year), n = cal.n;
   Object.assign(st.meta, { title: 'M1 Jahressimulation ' + year, dataClass: 'demo', source: 'Synthetische Demo-Daten · keine realen Personen',
     simulated: { roster: true, absences: true }, assumptions: [
@@ -77,19 +79,51 @@ export function demoState({ year = 2027, count = 141, seed = 2027 } = {}) {
       st.absences.push({ pk: p.pk, type: 'Urlaub', start: cal.iso[a], end: cal.iso[b], synthetic: true });
     });
   });
-  // Cluster 3: synthetischer Kursrahmen (Theorie 46 Tage, Praxis 7 Tage) als fixierte Szenariotermine
+  st.settings.courseBlocks = courseBlocks;
   let ix = buildIndex(st);
   const start0 = cal.idx(st.settings.start);
-  st.people.forEach((p, i) => {
-    if (p.cluster !== '3') return;
-    let d = start0;
-    for (const [type, len] of [['Theorie', 46], ['Praxis', 7]]) {
-      const ds = [];
-      for (; d < n && ds.length < len; d++) if (ix.work[d] && !ix.abs[i][d] && ros[i][d] === 2) ds.push(d);
-      if (ds.length === len) st.events.push({ id: uid(), pk: p.pk, type, title: 'Kursrahmen', auto: false, synthetic: true, start: cal.iso[ds[0]], end: cal.iso[ds[len - 1]],
-        dates: ds.map(x => cal.iso[x]), trainee: 1, mentor: 0, tec: 0, examiner: 0, target: '' });
+  if (!courseBlocks) {
+    // Fassung der Einzeldatei: Kursrahmen für Cluster 3 (Theorie 46 Tage, Praxis 7 Tage) als einzelne Szenariotage je Person
+    st.people.forEach((p, i) => {
+      if (p.cluster !== '3') return;
+      let d = start0;
+      for (const [type, len] of [['Theorie', 46], ['Praxis', 7]]) {
+        const ds = [];
+        for (; d < n && ds.length < len; d++) if (ix.work[d] && !ix.abs[i][d] && ros[i][d] === 2) ds.push(d);
+        if (ds.length === len) st.events.push({ id: uid(), pk: p.pk, type, title: 'Kursrahmen', auto: false, synthetic: true, start: cal.iso[ds[0]], end: cal.iso[ds[len - 1]],
+          dates: ds.map(x => cal.iso[x]), trainee: 1, mentor: 0, tec: 0, examiner: 0, target: '' });
+      }
+    });
+  } else {
+    // Lehrgänge als zusammenhängende Blöcke für Gruppen – alle als Szenario gekennzeichnet
+    st.meta.assumptions.splice(5, 0, 'Lehrgänge (Theorie, Praxis) als zusammenhängende Blöcke für Gruppen; dienstfreie Lehrgangstage gelten als Dienstplananpassung');
+    const add = (c, pks) => {
+      const course = { id: 'demo' + (st.courses.length + 1), target: '', seats: null, fixed: true, synthetic: true, ...c };
+      st.courses.push(course);
+      for (const pk of pks) { const e = memberEvent(st, ix, course, pk); if (e) { e.synthetic = true; st.events.push(e); } }
+      return course;
+    };
+    const block = (from, len) => { const ds = []; for (let d = from; d < n && ds.length < len; d++) if (ix.work[d]) ds.push(d); return ds; };
+    // Cluster 3: CAT-A-Kursrahmen (Theorie 46 Tage, danach Praxis 7 Tage); der Urlaub der Gruppe liegt außerhalb
+    const c3 = st.people.filter(p => p.cluster === '3').map(p => p.pk);
+    if (c3.length) {
+      const a = block(start0, 46), b = block(a[a.length - 1] + 1, 7), from = cal.iso[a[0]], to = cal.iso[b[b.length - 1]], set = new Set(c3);
+      st.absences = st.absences.filter(x => !(set.has(x.pk) && x.end >= from && x.start <= to));
+      ix = buildIndex(st);
+      add({ type: 'Theorie', title: 'CAT A Theorie', start: from, end: cal.iso[a[a.length - 1]], seats: Math.max(12, c3.length) }, c3);
+      add({ type: 'Praxis', title: 'CAT A Praxis', start: cal.iso[b[0]], end: to, seats: Math.max(12, c3.length) }, c3);
+      ix = buildIndex(st);
     }
-  });
+    // Cluster 5 · TEC: je Zielmuster die besten Zeiträume für Theorie, danach für Praxis
+    for (const type of ['Theorie', 'Praxis']) {
+      for (const g of courseDemand(st, ix).filter(x => x.type === type && x.target && x.open.length)) {
+        const res = proposeCourses(st, ix, { type, target: g.target, pks: g.open, len: g.days || (type === 'Theorie' ? 20 : 10), from: st.settings.start, to: year + '-12-17', minGroup: 1, maxGroup: 10, threshold: 'zero', maxCourses: 6 });
+        res.courses.sort((x, y) => x.start < y.start ? -1 : 1).forEach((a, k) => { add({ type, title: 'TEC ' + g.target + ' ' + type + (res.courses.length > 1 ? ' ' + (k + 1) : ''), target: g.target, start: a.start, end: a.end, seats: 10 }, a.pks); });
+        ix = buildIndex(st);
+      }
+    }
+  }
+  st.courses.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : a.title < b.title ? -1 : 1);
   ix = buildIndex(st);
   const res = optimizePlan(st, ix, { variants: 12 });
   st.events = res.events; st.report = res.report;

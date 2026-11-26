@@ -18,6 +18,9 @@ export function normalizeState(st) {
   c.events.forEach((e, i) => { e.id = 'E' + i; });
   if (c.meta) { c.meta.created = ''; c.meta.modified = ''; }
   if (c.planInfo) c.planInfo.at = '';
+  // Felder, die es in der Einzeldatei-Fassung noch nicht gab
+  if (Array.isArray(c.courses) && !c.courses.length) delete c.courses;
+  if (c.settings) delete c.settings.courseBlocks;
   return c;
 }
 export const normalizeEvents = evs => evs.map((e, i) => ({ ...e, id: 'E' + i }));

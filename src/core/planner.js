@@ -1,4 +1,4 @@
-import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS } from './constants.js';
+import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS, isCourseType } from './constants.js';
 import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
@@ -26,6 +26,12 @@ export function runPlan(st, ix, opt = {}) {
     let list = fixedBy.get(e.pk); if (!list) fixedBy.set(e.pk, list = []); list.push(e);
   }
   const events = keep.slice(), report = [], span = new Map();
+  // Lehrgänge als Block: Kurs-Schritte werden nicht tageweise verteilt, sondern über einen Platz in einem Lehrgangstermin belegt
+  const blocks = S.courseBlocks === true && Array.isArray(st.courses), courseDays = new Map(), seatUse = new Map();
+  if (blocks) {
+    for (const x of st.courses) { const ds = []; for (let d = Math.max(0, cal.idx(x.start)), b = Math.min(n - 1, cal.idx(x.end)); d <= b; d++) if (ix.work[d]) ds.push(d); courseDays.set(x.id, ds); }
+    for (const e of keep) if (e.courseId) seatUse.set(e.courseId, (seatUse.get(e.courseId) || 0) + 1);
+  }
   let mode = S.goal;                                    // aktuell geprüfte Grenze: 'zero' oder 'min'
   const buf = Math.max(0, num(S.buffer));              // Planungspuffer in Köpfen über der Grenze
   const thr = (k, d) => (mode === 'zero' ? cap.zero[k][d] : cap.min[k][d]) + buf;
@@ -85,15 +91,57 @@ export function runPlan(st, ix, opt = {}) {
       mode = tier === 'mixed' ? 'zero' : tier;
       let cursor = p.start && validDate(p.start) ? clamp(cal.idx(p.start), 0, n) : startDefault;
       if (needsFrame) for (const e of fixed) if (e.type === 'Praxis') cursor = Math.max(cursor, endIdx(e) + 1);
-      const local = [], log = [];
+      const local = [], log = [], seatLog = [];
       let reason = '', hardFail = false, failed = false, remaining = null;
-      const undo = cnt => { while (cnt-- > 0 && log.length) { const [k, d, sum, m, t, x, occupied] = log.pop(); L.loss[k][d] -= sum; L.mentor[k][d] -= m; L.tec[k][d] -= t; L.exam[k][d] -= x; if (occupied) o[d] = 0; } };
+      const undo = cnt => { while (cnt-- > 0 && log.length) { const [k, d, sum, m, t, x, occupied] = log.pop(); if (k >= 0) { L.loss[k][d] -= sum; L.mentor[k][d] -= m; L.tec[k][d] -= t; L.exam[k][d] -= x; } if (occupied) o[d] = 0; } };
+      const undoAll = () => { undo(log.length); for (const id of seatLog.splice(0)) seatUse.set(id, seatUse.get(id) - 1); };
       for (let r = 0; r < route.length; r++) {
         const t = route[r], c = cfg[t];
         if (!c || !Number.isInteger(c.days) || c.days < 1 || c.trainee == null) { reason = 'Dauer oder Produktivitätsverlust fehlt: ' + t; hardFail = true; break; }
         const fs = fixed.filter(e => e.type === t), count = fs.reduce((s, e) => s + dayCount(e), 0) + creditOf(p, t);   // Vorleistung aus Vorjahren zählt wie fixierte Tage
         for (const e of fs) cursor = Math.max(cursor, endIdx(e) + 1);
+        const course = blocks && isCourseType(t);
+        if (course && fs.some(e => e.courseId || e.courseKind)) continue;      // Teilnahme an einem Lehrgang erfüllt den Schritt
         if (count >= c.days) continue;
+        if (course) {
+          const sum = c.trainee + c.mentor + c.tec + c.examiner, offers = st.courses.filter(x => x.type === t && (!x.target || !p.target || x.target === p.target)), why = new Map();
+          const obstacle = x => {
+            const ds = courseDays.get(x.id) || [];
+            if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
+            if (x.seats != null && (seatUse.get(x.id) || 0) >= x.seats) return 'ausgebucht';
+            for (const d of ds) { if (ix.abs[i][d]) return 'Abwesenheit'; if (o[d]) return 'Terminkollision'; }
+            for (const d of ds) { const k = assign(ix, i, d); if (k >= 0 && !fits(k, d, c, sum)) return 'Kapazität'; }
+            return '';
+          };
+          let hit = null;
+          for (const m of (tier === 'mixed' ? ['zero', 'min'] : [mode])) {
+            mode = m; why.clear();
+            for (const x of offers) { const r = obstacle(x); if (!r) { hit = x; break; } why.set(r, (why.get(r) || 0) + 1); }
+            if (hit) break;
+          }
+          if (tier === 'mixed') mode = 'zero';
+          if (!hit) {
+            failed = true;
+            reason = offers.length ? 'Kein passender Lehrgangstermin für ' + t + ' (' + [...why].sort((a, b) => b[1] - a[1]).map(x => x[0]).join(', ') + ')'
+              : 'Kein Lehrgangstermin für ' + t + (p.target ? ' ' + p.target : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
+            remaining = [t + ': Lehrgang'];
+            for (let q = r + 1; q < route.length; q++) {
+              const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);
+              if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (isCourseType(route[q]) ? 'Lehrgang' : (c2.days - have) + ' Tage'));
+            }
+            break;
+          }
+          const ds = courseDays.get(hit.id);
+          for (const d of ds) {
+            const k = assign(ix, i, d); o[d] = 1;                                // dienstfreie Lehrgangstage: Dienstplananpassung ohne Produktionsverlust
+            if (k >= 0) { L.loss[k][d] += sum; L.mentor[k][d] += c.mentor; L.tec[k][d] += c.tec; L.exam[k][d] += c.examiner; log.push([k, d, sum, c.mentor, c.tec, c.examiner, 1]); }
+            else log.push([-1, d, 0, 0, 0, 0, 1]);
+          }
+          seatUse.set(hit.id, (seatUse.get(hit.id) || 0) + 1); seatLog.push(hit.id);
+          const e = mk(t, ds, null, c, false); e.courseId = hit.id; e.title = hit.title; e.courseKind = 'Lehrgang';
+          local.push(e); cursor = ds[ds.length - 1] + 1;
+          continue;
+        }
         const rot = t === LOGBOOK && Array.isArray(p.rotation) ? p.rotation : null;
         if (rot && rot[0] + rot[1] + rot[2] !== c.days) { reason = 'Rotationstage M1/M2/M3 passen nicht zur Logbook-Dauer'; hardFail = true; break; }
         const need = c.days - count;
@@ -135,7 +183,7 @@ export function runPlan(st, ix, opt = {}) {
         cursor = ds[ds.length - 1] + 1;
       }
       if (hardFail || (failed && (!allowPartial || !local.length))) {
-        undo(log.length);
+        undoAll();
         return { state: 'blocked', hardFail, reason: reason + (failed && local.length ? '; Kette nicht übernommen' : ''), remaining };
       }
       // Vorbereitung vor einer neu geplanten ICA: reiner Prüfer-/TEC-Aufwand, Teilnehmer bleibt produktiv
@@ -157,10 +205,10 @@ export function runPlan(st, ix, opt = {}) {
           }
           if (prep) break;
         }
-        if (!prep) { undo(log.length); return { state: 'blocked', reason: 'Vorbereitung vor ICA nicht möglich; Kette nicht übernommen' }; }
+        if (!prep) { undoAll(); return { state: 'blocked', reason: 'Vorbereitung vor ICA nicht möglich; Kette nicht übernommen' }; }
         local.push(prep);
       }
-      return { state: failed ? 'partial' : 'ok', local, reason, remaining, undo: () => undo(log.length) };
+      return { state: failed ? 'partial' : 'ok', local, reason, remaining, undo: undoAll };
     };
 
     // Erste vollständige Stufe gewinnt; sonst die Stufe mit den meisten planbaren Tagen (bei Gleichstand die schonendere).
