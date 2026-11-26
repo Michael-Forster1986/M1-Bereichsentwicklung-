@@ -52,3 +52,45 @@ describe('Projekt (Format 5)', () => {
     expect(() => Core.loadProject('kein json')).toThrow();
   });
 });
+
+describe('Pseudonymisierung über mehrere Planungsjahre', () => {
+  const real = () => {
+    const a = demo(2027, 8); a.meta.dataClass = 'real';
+    a.people.forEach((p, i) => { p.name = 'Nachname' + i + ', Vorname'; p.org = 'Abteilung ' + (i % 3); });
+    const prj = Core.wrapProject(a);
+    prj.years[2028] = Core.rolloverYear(a).state;
+    return prj;
+  };
+  it('vergibt derselben Person in jedem Jahr dasselbe Pseudonym und entfernt alle Klarnamen', () => {
+    const prj = real(), { project, key } = Core.pseudonymizeProject(prj), text = Core.serializeProject(project);
+    expect(text).not.toMatch(/Nachname\d/); expect(text).not.toContain('Abteilung');
+    for (const p of prj.years[2027].people) expect(text.includes('"' + p.pk + '"'), p.pk).toBe(false);
+    expect(project.years[2027].people.map(p => p.pk)).toEqual(project.years[2028].people.map(p => p.pk));
+    expect(project.years[2028].meta).toMatchObject({ dataClass: 'pseudo', privacy: true });
+    expect(key).toHaveLength(15);
+    expect(prj.years[2027].people[0].name).toBe('Nachname0, Vorname');          // Original bleibt unberührt
+    // Termine, Dienstplan und Abwesenheiten hängen am Pseudonym
+    const st = project.years[2027], pks = new Set(st.people.map(p => p.pk));
+    expect(st.events.every(e => pks.has(e.pk))).toBe(true);
+    expect(Object.keys(st.roster).every(pk => pks.has(pk))).toBe(true);
+  });
+  it('gleicht widersprüchliche Pseudonyme zwischen getrennt gepflegten Jahren aus', () => {
+    const prj = real();
+    prj.years[2028].people.forEach((p, i, all) => { p.alias = all[(i + 1) % all.length].alias; });   // andere Zuordnung im zweiten Jahr
+    prj.years[2028].people.push(Core.normPerson({ pk: 'NEU1', name: 'Neu, Person', alias: prj.years[2027].people[0].alias }));
+    const { project, key } = Core.pseudonymizeProject(prj), byPk = new Map(key.map(k => [k.pk, k.alias]));
+    expect(new Set(key.map(k => k.alias)).size).toBe(key.length);
+    expect(key).toHaveLength(16);
+    for (const y of [2027, 2028]) prj.years[y].people.forEach((p, i) => expect(project.years[y].people[i].pk).toBe(byPk.get(p.pk)));
+  });
+  it('die Schlüsseldatei stellt Namen und Nummern in allen Jahren wieder her', () => {
+    const prj = real(), { project, key } = Core.pseudonymizeProject(prj);
+    const hits = Core.reidentifyProject(project, key);
+    expect(hits).toEqual({ 2027: 15, 2028: 15 });
+    for (const y of [2027, 2028]) {
+      expect(project.years[y].people.map(p => [p.pk, p.name, p.org])).toEqual(prj.years[y].people.map(p => [p.pk, p.name, p.org]));
+      expect(project.years[y].meta.dataClass).toBe('real');
+      expect(project.years[y].events.map(e => e.pk)).toEqual(prj.years[y].events.map(e => e.pk));
+    }
+  });
+});

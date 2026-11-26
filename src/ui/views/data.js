@@ -3,7 +3,7 @@ import { csvDownload, download, pickFile, templateDownload } from '../files.js';
 import { $, html, raw } from '../dom.js';
 import { DATA_CLASS, fmt, fmtS, nf } from '../format.js';
 import { desktop, isDesktop } from '../../platform/desktop.js';
-import { CONF, DOC, IX, S, SUM, autosaveOn, clearAutosave, commit, privacy, resetAll, setAutosave } from '../state.js';
+import { CONF, DOC, IX, PRJ, S, SUM, autosaveOn, clearAutosave, commit, commitProject, privacy, projectClass, resetAll, setAutosave, years } from '../state.js';
 import { recentFiles } from '../project-files.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, VIEWS } from '../registry.js';
@@ -91,17 +91,21 @@ ACT['imp-key'] = async () => {
   const file = await pickFile('.csv,.txt'); if (!file) return;
   const { head, rows } = Core.rowsToObjects(Core.parseCSV(await file.text()));
   if (!head.includes('alias') || !head.includes('pk')) throw new Error('Schlüsseldatei braucht die Spalten alias und pk');
-  let hit = 0; commit('', () => { hit = Core.reidentify(S, rows); });
-  toast(hit ? nf(hit) + ' von ' + nf(S.people.length) + ' Personen wieder zugeordnet' : 'Keine passenden Pseudonyme gefunden', hit ? '' : 'crit');
+  // Die Schlüsseldatei gilt für alle Planungsjahre des Projekts
+  let hits = {}; commitProject('', prj => { hits = Core.reidentifyProject(prj, rows); });
+  const hit = hits[S.meta.year] || 0, others = years().length > 1 ? ' · insgesamt ' + nf(Object.values(hits).reduce((s, v) => s + v, 0)) + ' Zuordnungen in ' + years().length + ' Planungsjahren' : '';
+  toast(hit || others ? nf(hit) + ' von ' + nf(S.people.length) + ' Personen wieder zugeordnet' + others : 'Keine passenden Pseudonyme gefunden', Object.values(hits).some(Boolean) ? '' : 'crit');
 };
 ACT['tpl'] = t => templateDownload(t.dataset.k);
 ACT['exp-roster'] = () => { const sc = impScope(), a = IX.cal.idx(sc.start), b = IX.cal.idx(sc.end), rows = []; S.people.forEach((p, i) => { for (let d = a; d <= b; d++) { const c = IX.ros[i][d]; rows.push([privacy() ? p.alias : p.pk, IX.cal.iso[d], c >= 2 ? Core.kArea(c - 2) : 'M1', c >= 2 ? Core.kShift(c - 2) : 'Frei']); } }); csvDownload('Dienstplan', Core.TEMPLATES.roster, rows); };
 ACT['exp-pseudo'] = async () => {
-  const { state, key } = Core.pseudonymize(S), stamp = new Date().toISOString().slice(0, 10), real = S.meta.dataClass === 'real';
-  if (!await download('M1_Cockpit_' + S.meta.year + '_Projekt_' + stamp + '_pseudonymisiert.json', JSON.stringify(state))) return;
+  // Pseudonymisiert wird das ganze Projekt: dieselbe Person trägt in jedem Planungsjahr dasselbe Pseudonym
+  const { project, key } = Core.pseudonymizeProject(PRJ), stamp = new Date().toISOString().slice(0, 10), real = projectClass() === 'real';
+  const ys = years(), span = ys.length > 1 ? ys[0] + '-' + ys[ys.length - 1] : ys[0];
+  if (!await download('M1_Cockpit_' + span + '_Projekt_' + stamp + '_pseudonymisiert.' + (isDesktop ? 'm1cockpit' : 'json'), Core.serializeProject(project))) return;
   if (real) {
     if (!isDesktop) await new Promise(r => setTimeout(r, 600));                 // Browser: zweiter Download erst nach dem ersten
-    await download('M1_Cockpit_' + S.meta.year + '_Schluesseldatei_' + stamp + '_VERTRAULICH.csv', Core.toCSV(Core.TEMPLATES.key, key.map(k => [k.alias, k.pk, k.name, k.org])), 'text/csv');
+    await download('M1_Cockpit_' + span + '_Schluesseldatei_' + stamp + '_VERTRAULICH.csv', Core.toCSV(Core.TEMPLATES.key, key.map(k => [k.alias, k.pk, k.name, k.org])), 'text/csv');
   }
   toast(real ? 'Zwei Dateien: pseudonymisierte Projektdatei und Schlüsseldatei. Die Schlüsseldatei bleibt in der geschützten Umgebung.' : 'Pseudonymisierte Projektdatei gesichert');
 };

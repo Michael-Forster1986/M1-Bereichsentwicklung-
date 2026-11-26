@@ -7,6 +7,7 @@ import { decodeRoster, encodeRoster } from './roster.js';
 import { buildIndex } from './indexing.js';
 import { routeProgress } from './summary.js';
 import { loadAny, readPayload, sanitize } from './project.js';
+import { pseudonymize, reidentify } from './pseudonym.js';
 
 // ---------- Projekt: mehrere Planungsjahre in einer Datei ------------------
 // Ein Projekt bündelt je Planungsjahr einen vollständigen Jahresstand (Personen, Dienstplan,
@@ -131,4 +132,33 @@ export function refreshCredits(prev, st) {
     if (JSON.stringify(p.credit || null) !== before) changed++;
   }
   return changed;
+}
+
+// ---------- Pseudonymisierung über alle Planungsjahre ---------------------------
+/**
+ * Ersetzt in allen Planungsjahren Personalnummern und Namen durch Pseudonyme. Dieselbe Person trägt in jedem
+ * Jahr dasselbe Pseudonym; die Schlüsseltabelle wird getrennt geliefert.
+ */
+export function pseudonymizeProject(prj) {
+  const years = projectYears(prj), alias = new Map(), used = new Set(), copy = { ...prj, years: {} };
+  for (const y of years) for (const p of prj.years[y].people) if (!alias.has(p.pk) && p.alias && !used.has(p.alias)) { alias.set(p.pk, p.alias); used.add(p.alias); }
+  // Personen ohne eindeutiges Pseudonym (z. B. aus getrennt gepflegten Dateien) erhalten ein neues
+  let next = 1;
+  for (const a of used) { const m = a.match(/^P-(\d+)$/); if (m) next = Math.max(next, +m[1] + 1); }
+  for (const y of years) for (const p of prj.years[y].people) if (!alias.has(p.pk)) { let a; do { a = 'P-' + String(next++).padStart(3, '0'); } while (used.has(a)); alias.set(p.pk, a); used.add(a); }
+  const key = new Map();
+  for (const y of years) {
+    const st = clone(prj.years[y]);
+    for (const p of st.people) p.alias = alias.get(p.pk);
+    const res = pseudonymize(st);
+    copy.years[y] = res.state;
+    for (const k of res.key) if (!key.has(k.alias)) key.set(k.alias, k);
+  }
+  return { project: copy, key: [...key.values()].sort((a, b) => a.alias < b.alias ? -1 : 1) };
+}
+/** Ordnet mit der Schlüsseltabelle in allen Planungsjahren Namen und Nummern wieder zu; liefert die Zahl der Treffer je Jahr. */
+export function reidentifyProject(prj, keyRows) {
+  const hits = {};
+  for (const y of projectYears(prj)) hits[y] = reidentify(prj.years[y], keyRows);
+  return hits;
 }

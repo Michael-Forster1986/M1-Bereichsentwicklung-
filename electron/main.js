@@ -25,6 +25,8 @@ const DEV_URL = app.isPackaged ? '' : (process.env.M1_DEV_URL || '');     // nur
 const START_URL = DEV_URL || ORIGIN + '/index.html';
 const MAX_FILE = 60e6;
 
+// Die Oberfläche ist deutsch – Datumsfelder und Systemdialoge sollen es unabhängig von der Windows-Anzeigesprache auch sein
+app.commandLine.appendSwitch('lang', 'de-DE');
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
 
 // ---------- Einstellungen (Benutzerprofil) ----------------------------------

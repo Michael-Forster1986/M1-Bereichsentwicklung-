@@ -17,7 +17,7 @@ export { courseAssess, courseSearch, pickSlots, courseEvents } from './courses.j
 export { TEMPLATES, parseCSV, rowsToObjects, toCSV } from './csv.js';
 export { checkPeople, applyPeople, checkRoster, applyRoster, checkAbsences, applyAbsences, checkCapacity, checkEvents } from './imports.js';
 export { sanitize, migrateLegacy, loadAny, readPayload } from './project.js';
-export { PROJECT_VERSION, wrapProject, projectYears, isProjectPayload, sanitizeProject, sanitizeAny, loadProject, serializeProject, carriedCredit, rolloverYear, refreshCredits } from './workspace.js';
+export { PROJECT_VERSION, wrapProject, projectYears, isProjectPayload, sanitizeProject, sanitizeAny, loadProject, serializeProject, carriedCredit, rolloverYear, refreshCredits, pseudonymizeProject, reidentifyProject } from './workspace.js';
 export { pseudonymize, reidentify } from './pseudonym.js';
 export { demoState } from './demo.js';
 export { readXlsx, xlsxPeopleTable } from './xlsx-read.js';

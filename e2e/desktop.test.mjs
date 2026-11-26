@@ -49,6 +49,7 @@ test('startet als Desktop-Programm aus dem Programmpaket', async () => {
   assert.equal(await page.evaluate(() => window.m1desktop.info.ext), 'm1cockpit');
   assert.equal(await page.evaluate(() => typeof window.require + typeof window.process), 'undefinedundefined', 'kein Node.js in der Oberfläche');
   assert.equal(await title(), 'Unbenanntes Projekt – M1 Qualifikationscockpit');
+  assert.match(await page.evaluate(() => navigator.language), /^de/, 'deutsche Oberfläche unabhängig von der Systemsprache');
 });
 
 test('baut keine Netzwerkverbindungen auf', async () => {
