@@ -365,7 +365,9 @@ test('Fehleraufzeichnung: Programmfehler landen ohne Projektdaten im Protokoll',
   const text = fs.readFileSync(log, 'utf8');
   assert.match(text, /Version \d+\.\d+\.\d+ {2}Oberfläche: Programmfehler: TypeError/);
   assert.doesNotMatch(text, /Person \d{3}/, 'keine Namen im Protokoll');
-  errors.length = 0;                                   // der ausgelöste Fehler ist erwartet
+  // der ausgelöste Fehler ist erwartet – erst verwerfen, wenn er auch hier angekommen ist
+  await waitFor(() => errors.some(e => /fehlt/.test(e)), 'Fehlermeldung der Oberfläche');
+  errors.length = 0;
 });
 
 test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreicht nur sein Ziel', async () => {
@@ -393,6 +395,7 @@ test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreich
   try {
     await shutdown();
     await launch([], { M1_UPDATE_URL: 'http://127.0.0.1:' + server.address().port + '/' });
+    errors.length = 0;
     assert.equal((await state()).mode, 'notify');
     await menu('act', 'update-check');
     await waitFor(async () => /Version 99\.0\.0 ist verfügbar/.test(await toastText()), 'Meldung der neuen Version');
