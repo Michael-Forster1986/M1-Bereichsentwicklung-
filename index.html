@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow">
+<title>M1 Qualifikationscockpit</title>
+<link rel="stylesheet" href="./src/styles/app.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top" id="top"></header>
+  <nav class="rail" id="rail" aria-label="Ansichten"></nav>
+  <main id="main" tabindex="-1"></main>
+</div>
+<aside class="drawer" id="drawer" aria-label="Einzelheiten" hidden></aside>
+<div class="modal" id="modal" hidden></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<div class="toasts" id="toasts"></div>
+<input type="file" id="filePick" hidden>
+<noscript><p style="padding:24px">Dieses Programm benötigt JavaScript. Es läuft vollständig lokal und überträgt keine Daten.</p></noscript>
+<script id="embedded-state" type="application/json">null</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

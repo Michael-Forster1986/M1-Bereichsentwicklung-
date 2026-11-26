@@ -1,0 +1,26 @@
+{
+  "name": "m1-qualifikationscockpit",
+  "productName": "M1 Qualifikationscockpit",
+  "version": "5.0.0",
+  "description": "Jahresplanung von Qualifikationsmaßnahmen mit Kapazitätsprüfung – Desktop-Programm",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:app && npm run build:html",
+    "build:app": "vite build",
+    "build:html": "vite build --mode standalone && node scripts/finish-standalone.mjs",
+    "start": "npm run build && electron .",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "vite": "^8.3.8",
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.2"
+  }
+}
