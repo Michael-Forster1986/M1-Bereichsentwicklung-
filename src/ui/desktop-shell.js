@@ -7,6 +7,7 @@ import { closeModal, openModal, safe, toast } from './dialogs.js';
 import { ACT } from './registry.js';
 import { go } from './shell.js';
 import { presentLoad, refreshRecent, saveProject } from './project-files.js';
+import { initUpdate, setUpdate } from './update.js';
 
 /* ==========================================================================
  * Oberfläche · Desktop-Programm: Menübefehle, Dateien vom Betriebssystem,
@@ -31,6 +32,7 @@ async function closeRequest() {
 function command(cmd, arg) {
   if (cmd === 'close-request') return closeRequest();
   if (cmd === 'go') return go(arg);
+  if (cmd === 'update-state') return setUpdate(arg);
   if (cmd === 'open-file') return presentLoad(arg.text, arg.name, { token: arg.token, name: arg.name, path: arg.path });
   if (cmd === 'act') {
     if (arg === 'undo') return undo();
@@ -52,5 +54,6 @@ export function initDesktop() {
   desktop.onCommand((cmd, arg) => safe(() => command(cmd, arg)));
   safe(offerRecovery);
   refreshRecent();
+  initUpdate();
   desktop.ready();                       // ab jetzt stellt der Hauptprozess Dateien und Menübefehle zu
 }

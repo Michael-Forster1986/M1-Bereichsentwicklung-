@@ -1,4 +1,5 @@
 import { $, html, setHTML } from './dom.js';
+import { logError } from '../platform/desktop.js';
 import { UI } from './state.js';
 import { renderDrawer } from './drawers.js';
 
@@ -13,8 +14,9 @@ export function toast(text, kind = '', action = null) {
   setTimeout(() => el.remove(), action ? 9000 : kind === 'crit' ? 7000 : 3800);
 }
 export function safe(fn) {
-  try { const r = fn(); if (r && typeof r.catch === 'function') r.catch(err => { console.error(err); toast('Fehler: ' + (err.message || err), 'crit'); }); return r; }
-  catch (err) { console.error(err); toast('Fehler: ' + (err.message || err), 'crit'); }
+  const fail = err => { console.error(err); if (err instanceof Error && err.constructor !== Error) logError(err, 'Aktion'); toast('Fehler: ' + (err.message || err), 'crit'); };
+  try { const r = fn(); if (r && typeof r.catch === 'function') r.catch(fail); return r; }
+  catch (err) { fail(err); }
 }
 export let modalHandlers = {}, modalCloseCb = null, lastFocus = null;
 export function openModal({ title, body, footer, wide = false, handlers = {}, onClose = null }) {

@@ -3,8 +3,10 @@
  *
  * Aufgaben: Fenster und Menü, Projektdateien öffnen und speichern (mit
  * Sicherungskopie), zuletzt geöffnete Dateien, Wiederherstellungskopie,
- * PDF-Ausgabe. Die Oberfläche läuft abgeschottet und ohne Netzwerkzugriff:
- * geladen wird ausschließlich aus dem Programmpaket (app://cockpit/…).
+ * PDF-Ausgabe, Fehleraufzeichnung und Aktualisierung. Die Oberfläche läuft
+ * abgeschottet und ohne Netzwerkzugriff: geladen wird ausschließlich aus dem
+ * Programmpaket (app://cockpit/…). Die einzige Verbindung nach außen ist die
+ * abschaltbare Suche nach einer neuen Programmversion (electron/updater.js).
  * ========================================================================== */
 import { app, BrowserWindow, Menu, dialog, ipcMain, protocol, screen, session } from 'electron';
 import crypto from 'node:crypto';
@@ -12,6 +14,8 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { logLine, showLog, trace, watchWindow } from './diagnose.js';
+import { checkForUpdate, initUpdater, installNow, openReleasePage, setUpdatesEnabled, updateReady, updateState } from './updater.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
@@ -27,10 +31,12 @@ const MAX_FILE = 60e6;
 
 // Die Oberfläche ist deutsch – Datumsfelder und Systemdialoge sollen es unabhängig von der Windows-Anzeigesprache auch sein
 app.commandLine.appendSwitch('lang', 'de-DE');
+// Reagiert das Fenster nicht mehr, lässt sich so die Stelle im Programmcode ermitteln (siehe electron/diagnose.js)
+app.commandLine.appendSwitch('enable-features', 'DocumentPolicyIncludeJSCallStacksInCrashReports');
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
 
 // ---------- Einstellungen (Benutzerprofil) ----------------------------------
-const settings = { recovery: false, backups: true, recent: [], lastDir: '', exportDir: '', bounds: null };
+const settings = { recovery: false, backups: true, updates: true, recent: [], lastDir: '', exportDir: '', bounds: null };
 const settingsFile = () => path.join(app.getPath('userData'), 'einstellungen.json');
 const recoveryFile = () => path.join(app.getPath('userData'), 'Wiederherstellung.' + EXT);
 function loadSettings() {
@@ -38,6 +44,7 @@ function loadSettings() {
     const x = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
     settings.recovery = x.recovery === true;
     settings.backups = x.backups !== false;
+    settings.updates = x.updates !== false;
     settings.recent = (Array.isArray(x.recent) ? x.recent : []).filter(f => typeof f === 'string').slice(0, 8);
     for (const k of ['lastDir', 'exportDir']) settings[k] = typeof x[k] === 'string' ? x[k] : '';
     settings.bounds = x.bounds && typeof x.bounds === 'object' ? x.bounds : null;
@@ -89,7 +96,7 @@ const fileFromArgv = (argv, cwd = process.cwd()) => {
 };
 
 // ---------- Fenster ----------------------------------------------------------
-let win = null, rendererReady = false, pendingFile = null, closing = false, closeTimer = null;
+let win = null, rendererReady = false, pendingFile = null, closing = false, closeTimer = null, restartForUpdate = false;
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 async function serveApp(request) {
@@ -99,10 +106,11 @@ async function serveApp(request) {
   const file = path.normalize(path.join(APP_DIR, rel));
   if (!file.startsWith(APP_DIR + path.sep)) return new Response('', { status: 403 });
   try {
-    return new Response(await fsp.readFile(file), { headers: { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store' } });
+    return new Response(await fsp.readFile(file), { headers: { 'content-type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'cache-control': 'no-store',
+      'document-policy': 'include-js-call-stacks-in-crash-reports' } });
   } catch (err) { return new Response('', { status: 404 }); }
 }
-/** Das Programm baut keine Netzwerkverbindungen auf; alles außer den eigenen Programmdateien wird abgewiesen. */
+/** Die Oberfläche baut keine Netzwerkverbindungen auf; alles außer den eigenen Programmdateien wird abgewiesen. */
 function lockDown() {
   const ses = session.defaultSession, devWs = DEV_URL.replace(/^http/, 'ws');
   ses.webRequest.onBeforeRequest((details, cb) => {
@@ -133,6 +141,7 @@ function createWindow() {
   win.webContents.on('will-navigate', (e, url) => { if (url !== START_URL) e.preventDefault(); });
   win.webContents.on('did-start-loading', () => { rendererReady = false; });
   win.on('close', onClose);
+  watchWindow(win, { title: APP_NAME, recoveryOn: () => settings.recovery });
   win.on('closed', () => { win = null; });
   win.loadURL(START_URL);
 }
@@ -171,8 +180,8 @@ async function deliverFile(file) {
 }
 function about() {
   dialog.showMessageBox(win, { type: 'info', title: 'Über ' + APP_NAME, message: APP_NAME + ' ' + app.getVersion(),
-    detail: 'Jahresplanung von Qualifikationsmaßnahmen mit Kapazitätsprüfung.\n\nDas Programm arbeitet vollständig lokal: Es baut keine Netzwerkverbindungen auf und überträgt keine Daten. '
-      + 'Projektdateien liegen dort, wo Sie sie speichern.\n\nPlanungswerkzeug – keine zertifizierte Qualifikations- oder Produktionsfreigabe.\n\n'
+    detail: 'Jahresplanung von Qualifikationsmaßnahmen mit Kapazitätsprüfung.\n\nDas Programm arbeitet lokal und überträgt keine Daten. Die einzige Verbindung nach außen ist die Suche nach einer '
+      + 'neuen Programmversion auf GitHub; sie lässt sich unter „Daten & Datenschutz“ abschalten. Projektdateien liegen dort, wo Sie sie speichern.\n\nPlanungswerkzeug – keine zertifizierte Qualifikations- oder Produktionsfreigabe.\n\n'
       + 'Electron ' + process.versions.electron + ' · Chromium ' + process.versions.chrome });
 }
 function buildMenu() {
@@ -227,6 +236,9 @@ function buildMenu() {
       { label: 'Anleitung', accelerator: 'F1', click: send('go', 'help') },
       { label: 'Daten && Datenschutz', click: send('go', 'data') },
       sep,
+      { label: 'Nach Aktualisierung suchen …', click: send('act', 'update-check') },
+      { label: 'Fehlerprotokoll anzeigen', click: () => showLog(win, APP_NAME) },
+      sep,
       { label: 'Über ' + APP_NAME, click: about }] }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -238,7 +250,7 @@ const handle = (channel, fn) => ipcMain.handle(channel, (e, ...args) => { if (!t
 const on = (channel, fn) => ipcMain.on(channel, (e, ...args) => { if (trusted(e)) fn(e, ...args); });
 
 ipcMain.on('m1:init', e => {
-  e.returnValue = trusted(e) ? { info: { version: app.getVersion(), platform: process.platform, ext: EXT }, settings: { recovery: settings.recovery, backups: settings.backups } } : null;
+  e.returnValue = trusted(e) ? { info: { version: app.getVersion(), platform: process.platform, ext: EXT }, settings: { recovery: settings.recovery, backups: settings.backups, updates: settings.updates } } : null;
 });
 on('m1:ready', () => { rendererReady = true; if (pendingFile) { const f = pendingFile; pendingFile = null; deliverFile(f); } });
 on('m1:doc-state', (_e, st) => {
@@ -248,13 +260,23 @@ on('m1:doc-state', (_e, st) => {
   if (process.platform === 'darwin') win.setDocumentEdited(dirty);
 });
 on('m1:close-ack', () => clearTimeout(closeTimer));
-on('m1:close-cancel', () => clearTimeout(closeTimer));
+on('m1:close-cancel', () => { clearTimeout(closeTimer); restartForUpdate = false; });
 on('m1:close-now', () => { clearTimeout(closeTimer); closing = true; if (win) win.close(); });
 
 handle('m1:settings-set', (key, value) => {
-  if (key !== 'recovery' && key !== 'backups') throw new Error('Unbekannte Einstellung');
-  settings[key] = value === true; saveSettings(); return true;
+  if (key !== 'recovery' && key !== 'backups' && key !== 'updates') throw new Error('Unbekannte Einstellung');
+  settings[key] = value === true; saveSettings();
+  if (key === 'updates') setUpdatesEnabled(settings.updates);
+  return true;
 });
+// Aktualisierung
+handle('m1:update-state', () => updateState());
+handle('m1:update-check', () => checkForUpdate());
+handle('m1:update-install', () => { if (!updateReady() || !win) return false; restartForUpdate = true; win.close(); return true; });
+handle('m1:update-page', () => { openReleasePage(); return true; });
+// Fehleraufzeichnung: Name der zuletzt ausgelösten Aktion und Fehlermeldungen der Oberfläche
+on('m1:trace', (_e, name) => trace(name));
+on('m1:log', (_e, text) => logLine('Oberfläche: ' + String(text || '').slice(0, 4000)));
 handle('m1:open', async () => {
   const r = await dialog.showOpenDialog(win, { title: 'Projekt öffnen', defaultPath: existingDir(settings.lastDir), properties: ['openFile'], filters: [
     { name: 'M1-Cockpit-Projekte', extensions: [EXT, 'json'] }, { name: 'Dateien der Vorgängerversion', extensions: ['html', 'htm', 'json'] }, { name: 'Alle Dateien', extensions: ['*'] }] });
@@ -335,7 +357,10 @@ else {
     const f = fileFromArgv(argv, cwd); if (f) deliverFile(f);
   });
   app.on('open-file', (e, file) => { e.preventDefault(); if (win) deliverFile(file); else pendingFile = file; });
-  app.on('window-all-closed', () => app.quit());
+  app.on('window-all-closed', () => {
+    // „Jetzt neu starten“: geladene Version installieren und wieder starten; gelingt das nicht, endet das Programm trotzdem
+    if (restartForUpdate && updateReady()) { installNow(); setTimeout(() => app.quit(), 4000); } else app.quit();
+  });
   app.whenReady().then(() => {
     loadSettings();
     protocol.handle('app', serveApp);
@@ -343,5 +368,6 @@ else {
     buildMenu();
     pendingFile = pendingFile || fileFromArgv(process.argv);
     createWindow();
+    initUpdater({ enabled: settings.updates, onLog: logLine, onChange: st => { if (win && rendererReady) win.webContents.send('m1:command', 'update-state', st); } });
   });
 }

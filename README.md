@@ -12,7 +12,25 @@ und Excel sowie mehrere Planungsjahre in einem Projekt.
 
 ## Programm erhalten
 
-Jeder Stand wird auf GitHub automatisch geprüft und gebaut (Reiter **Actions** → Lauf
+Die aktuelle Version steht unter **Releases**:
+<https://github.com/Michael-Forster1986/M1-Bereichsentwicklung-/releases/latest>
+
+| Datei | Wofür |
+|---|---|
+| `M1-Qualifikationscockpit-<Version>-Setup.exe` | Installation mit Startmenü-Eintrag, ohne Administratorrechte. **Aktualisiert sich danach selbst.** |
+| `M1-Qualifikationscockpit-<Version>-portable.exe` | Eine Datei, startet ohne Installation. Meldet neue Versionen, ersetzt sich aber nicht selbst. |
+
+### Automatische Aktualisierung
+
+Das installierte Programm sucht kurz nach dem Start und danach alle sechs Stunden in den Releases dieses
+Projekts nach einer neueren Version, lädt sie im Hintergrund und installiert sie beim Beenden. Abgerufen werden
+nur die Versionsangabe und das Installationsprogramm; aus dem Programm wird nichts übertragen. Stand, „Jetzt
+suchen“ und der Schalter zum Abschalten stehen unter „Daten & Datenschutz“ → „Programm-Aktualisierung“.
+
+Voraussetzungen: Installation über das Setup, und der Rechner erreicht `github.com`. Wer bisher eine ältere
+Fassung ohne diese Funktion nutzt (bis 5.1.0), installiert einmal das aktuelle Setup.
+
+Zwischenstände jedes Laufs hängen zusätzlich als Artefakte an den Läufen (Reiter **Actions** → Lauf
 „Programm prüfen und bauen“ → Abschnitt **Artifacts**):
 
 | Artefakt | Inhalt | Wofür |
@@ -39,7 +57,8 @@ signiert sie mit dem Firmenzertifikat.
 | Echtbetrieb | Karte „Bereit für die echte Planung?“, simulierte Daten entfernen (Personen, Qualifikationen und Cluster bleiben) |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
 | Mehrere Jahre | Planungsjahre in einem Projekt, Folgejahr anlegen mit Übernahme, Vorleistungen aus Vorjahren, Jahresvergleich |
-| Datenschutz | Kein Netzwerkzugriff, „Namen verbergen“, pseudonymisierter Export mit getrennter Schlüsseldatei |
+| Datenschutz | Keine Übertragung von Daten, „Namen verbergen“, pseudonymisierter Export mit getrennter Schlüsseldatei |
+| Betrieb | Automatische Aktualisierung (abschaltbar), Fehlerprotokoll ohne Projektdaten, Dialog „Weiter warten / Neu laden“, wenn das Fenster nicht reagiert |
 
 ### Lehrgänge
 
@@ -65,9 +84,14 @@ als Simulation um 52 Wochen fortgeschrieben werden, bis der echte vorliegt.
 
 ### Datenschutz
 
-- Das Programm baut keine Netzwerkverbindungen auf. Eine Inhaltsrichtlinie und eine Sperre im
-  Hauptprozess weisen alles außer den eigenen Programmdateien ab; es gibt keine automatischen
-  Aktualisierungen, keine Telemetrie und keine externen Bibliotheken zur Laufzeit.
+- Die Oberfläche baut keine Netzwerkverbindungen auf. Eine Inhaltsrichtlinie und eine Sperre im
+  Hauptprozess weisen alles außer den eigenen Programmdateien ab; es gibt keine Telemetrie und keine
+  externen Bibliotheken zur Laufzeit.
+- Die einzige Verbindung nach außen ist die Suche nach einer neuen Programmversion. Ihr Kanal erreicht
+  ausschließlich die Releases dieses Projekts und die Dateiablage von GitHub; übertragen wird nichts aus dem
+  Programm. Sie lässt sich abschalten – dann bleibt das Programm vollständig ohne Netzwerk.
+- Das Fehlerprotokoll (Hilfe → Fehlerprotokoll anzeigen) liegt nur im Benutzerprofil und enthält Zeitpunkt,
+  Version, den Namen der zuletzt ausgelösten Aktion und die Stelle im Programmcode – keine Projektdaten.
 - Die Oberfläche läuft abgeschottet (ohne Zugriff auf Node.js oder das Dateisystem). Dateipfade wählt
   ausschließlich der Mensch im Dateidialog.
 - Personendaten liegen nur in den Dateien, die Sie selbst speichern. Dazu gehören die Sicherungskopie
@@ -83,7 +107,7 @@ als Simulation um 52 Wochen fortgeschrieben werden, bis der echte vorliegt.
 | `src/ui/` | Oberfläche: Zustand und Rückgängig, Dialoge, Ansichten (`views/`), Ausgaben, Desktop-Anbindung |
 | `src/platform/` | Brücke zum Desktop-Programm (im Browser ohne Funktion) |
 | `src/styles/` | Gestaltung |
-| `electron/` | Hauptprozess (Fenster, Menü, Dateien, PDF) und abgeschottete Brücke zur Oberfläche |
+| `electron/` | Hauptprozess (Fenster, Menü, Dateien, PDF), Aktualisierung, Fehleraufzeichnung und abgeschottete Brücke zur Oberfläche |
 | `tests/` | Tests des Rechenkerns, darunter der Vergleich mit der ursprünglichen HTML-Fassung |
 | `e2e/` | Tests des Desktop-Programms im echten Fenster |
 | `legacy/` | Ursprüngliche Einzeldatei (Format 4) als Referenz für den Vergleich |
@@ -121,6 +145,14 @@ npm install
 Beim Entwickeln lädt `M1_DEV_URL=http://localhost:5173 npx electron .` die Oberfläche direkt vom
 Entwicklungsserver.
 
+### Versionen veröffentlichen
+
+Der Lauf auf `main` veröffentlicht jede **neue Versionsnummer** aus `package.json` einmal als Release
+(Setup, portable `.exe`, `latest.yml`). Installierte Programme holen sie sich von dort. Eine Änderung, die
+ausgeliefert werden soll, braucht deshalb eine höhere Versionsnummer; ohne sie entsteht kein Release.
+Die `.exe`-Dateien sind nicht signiert: Die Echtheit einer Aktualisierung hängt an der HTTPS-Verbindung zu
+GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub-Kontos (Zwei-Faktor-Anmeldung).
+
 ### Absicherung
 
 - **Gleichheit mit der HTML-Fassung:** `tests/parity.test.js` lädt den Rechenkern aus
@@ -130,4 +162,7 @@ Entwicklungsserver.
   eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
-  Wiederherstellung, den Jahreswechsel, den Urlaubsplan-Import aus Excel, Lehrgangsvorschläge und das Ziehen im Jahresplan – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`).
+  Wiederherstellung, den Jahreswechsel, den Urlaubsplan-Import aus Excel, Lehrgangsvorschläge, das Ziehen im Jahresplan,
+  das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
+  Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
+  Installation einer Aktualisierung unter Windows selbst.

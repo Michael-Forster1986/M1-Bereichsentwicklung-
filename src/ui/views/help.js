@@ -165,6 +165,10 @@ VIEWS.help = {
           <tr><td><b>Excel-Arbeitsmappe</b></td><td>Dieselben Daten als Tabellenblätter zum Weiterrechnen</td><td>Bericht → Excel</td></tr>
           <tr><td><b>Ansicht als PDF</b></td><td>Die aktuelle Ansicht, z. B. der Jahresplan</td><td>${isDesktop ? 'Datei → Exportieren' : '„Drucken“ → Als PDF speichern'}</td></tr>
           <tr><td><b>CSV-Listen</b></td><td>Termine, Lehrgänge, Personen, Tageskapazität, Abwesenheiten</td><td>Schaltfläche „CSV“ in der jeweiligen Ansicht</td></tr></tbody></table></div>
+        ${isDesktop ? html`<h3>Neue Programmversionen</h3>
+        <p>Das installierte Programm sucht kurz nach dem Start und danach alle sechs Stunden nach einer neueren Version, lädt sie im Hintergrund und installiert sie beim Beenden. Sie müssen nichts herunterladen. Ein Hinweis meldet, wenn eine Version bereitliegt; „Jetzt neu starten“ installiert sofort.</p>
+        <ul class="h-list"><li><b>Voraussetzung:</b> das Programm ist über das Setup installiert und der Rechner erreicht GitHub. Die portable Fassung meldet eine neue Version nur.</li>
+          <li><b>Abschalten und Stand:</b> unter ${go('data', 'Daten & Datenschutz')} auf der Karte „Programm-Aktualisierung“; von Hand suchen Sie über Hilfe → Nach Aktualisierung suchen.</li></ul>` : ''}
         <h3>Dateien zum Einspielen</h3>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Datei</th><th>Spalten</th><th>Hinweis</th></tr></thead><tbody>
           <tr><td><b>Urlaubsplan</b></td><td>Zeile je Person, Spalte je Tag, Kürzel</td><td class="muted">Excel oder CSV; Kürzel werden beim Einspielen zugeordnet</td></tr>
@@ -177,7 +181,7 @@ VIEWS.help = {
         <p class="small muted" style="margin-top:8px">Datum als TT.MM.JJJJ oder JJJJ-MM-TT. Leere Vorlagen gibt es unter „Daten & Datenschutz“.</p></section>
 
       <section class="card" id="h-daten"><h2>11 · Datenschutz</h2>
-        <ul class="h-list"><li><b>Keine Übertragung.</b> Das Programm baut keine Netzwerkverbindung auf. Personendaten liegen nur in den Dateien, die Sie selbst ${isDesktop ? 'speichern' : 'sichern'}.</li>
+        <ul class="h-list"><li><b>Keine Übertragung.</b> ${isDesktop ? 'Projektdaten verlassen den Rechner nicht. Die einzige Verbindung nach außen ist die Suche nach einer neuen Programmversion; dabei wird nichts aus dem Programm übertragen.' : 'Das Programm baut keine Netzwerkverbindung auf.'} Personendaten liegen nur in den Dateien, die Sie selbst ${isDesktop ? 'speichern' : 'sichern'}.</li>
           <li><b>Namen verbergen.</b> Die Schaltfläche in der Kopfzeile ersetzt überall Namen und Personalnummern durch Pseudonyme – für Besprechungen, Bildschirmfotos und Berichte.</li>
           <li><b>Pseudonymisiert sichern.</b> Erzeugt eine Projektdatei ohne Namen und eine getrennte Schlüsseldatei. Pseudonymisiert ist nicht anonym: die Schlüsseldatei gehört geschützt aufbewahrt.</li>
           <li><b>Dateinamen.</b> Dateien mit Personendaten tragen „VERTRAULICH“ im Namen.</li></ul>
@@ -187,6 +191,7 @@ VIEWS.help = {
         ${faq('Eine Person bekommt keine Termine – warum?', html`Im ${go('report', 'Bericht')} steht je Person das Ergebnis mit Begründung. Häufige Gründe: Cluster offen, Zielmuster oder Zielstufe fehlen (Cluster 5), kein Lehrgangstermin vorhanden, kein Dienstplan, oder die Kapazität reicht an keinem passenden Tag.`)}
         ${faq('Der Urlaubsplan wurde eingespielt, aber einige Personen fehlen.', 'Die Vorschau nennt, wie viele Personen erkannt wurden und welche Zeilen übersprungen sind. Erkannt wird über die Personalnummer oder den Namen in einer Spalte vor den Tagen. Stimmen Schreibweisen nicht, hilft eine Spalte mit der Personalnummer.')}
         ${faq('Im Bericht stehen „Hinweise“ zu Lehrgängen. Ist das ein Problem?', 'Nein. „Dienstplananpassung“ heißt: Der Lehrgangstag wäre laut Dienstplan frei. Die Person kommt zum Lehrgang, der Produktion fehlt niemand – nur der Dienstplan ist anzupassen. Als Konflikt zählen Abwesenheit, Terminkollision und unterschrittene Kapazität.')}
+        ${isDesktop ? faq('Das Programm reagiert nicht mehr.', 'Nach einigen Sekunden erscheint die Frage „Weiter warten“ oder „Programm neu laden“. Die Stelle wird im Fehlerprotokoll festgehalten (Hilfe → Fehlerprotokoll anzeigen). Das Protokoll enthält keine Projektdaten – nur Zeitpunkt, Version, die zuletzt ausgelöste Aktion und die Stelle im Programmcode. Damit beim Neuladen nichts verloren geht, lässt sich unter „Daten & Datenschutz“ die Wiederherstellungskopie einschalten.') : ''}
         ${faq('Ich habe etwas falsch gemacht – wie komme ich zurück?', html`${kbd('Strg', 'Z')} oder der Pfeil in der Kopfzeile nimmt die letzten 30 Schritte zurück, auch das Laden einer Datei, das Entfernen simulierter Daten oder das Anlegen eines Jahres.`)}
         ${faq('Der Plan soll stehen bleiben, auch wenn ich neu berechne.', html`Unter ${go('events', 'Termine')} macht „Plan fixieren“ aus allen berechneten Terminen fixierte. Einzelne Termine fixieren Sie über „Fixieren“ oder indem Sie den Balken verschieben.`)}
         ${faq('Zwei Lehrgänge derselben Art sollen gleichzeitig laufen.', 'Beim Berechnen der besten Zeiträume den Haken „nicht gleichzeitig“ entfernen. Von Hand angelegte Lehrgänge dürfen sich immer überschneiden.')}
@@ -213,7 +218,7 @@ VIEWS.help = {
           <li>Krankenquoten sind Planungsannahmen, keine Prognose. Cluster und Berechtigungen sind keine Leistungsbewertung.</li>
           <li>Der Variantenvergleich des Planers und die Suche nach Lehrgangszeiträumen sind Näherungsverfahren ohne Nachweis, dass es keine bessere Lösung gibt.</li>
           <li>Mit simuliertem Dienstplan ist die Kapazität eine Näherung.</li></ul>
-        <p class="small muted" style="margin-top:10px">M1 Qualifikationscockpit${isDesktop ? ' ' + (desktop.info.version || '') : ''} · Format ${Core.FORMAT} ${Core.PROJECT_VERSION} · ${isDesktop ? 'Desktop-Programm; läuft vollständig lokal, ohne Netzwerkverbindung und ohne externe Bibliotheken.' : 'läuft vollständig lokal im Browser, ohne Installation und ohne externe Bibliotheken.'}
+        <p class="small muted" style="margin-top:10px">M1 Qualifikationscockpit${isDesktop ? ' ' + (desktop.info.version || '') : ''} · Format ${Core.FORMAT} ${Core.PROJECT_VERSION} · ${isDesktop ? 'Desktop-Programm; arbeitet lokal und ohne externe Bibliotheken – einzige Verbindung nach außen ist die abschaltbare Suche nach einer neuen Programmversion.' : 'läuft vollständig lokal im Browser, ohne Installation und ohne externe Bibliotheken.'}
           Tastatur: ${kbd('Strg', 'Z')} rückgängig · ${kbd('Strg', 'Y')} wiederholen · ${kbd('Strg', 'S')} ${isDesktop ? 'speichern' : 'sichern'}${isDesktop ? html` · ${kbd('Strg', '1')} … ${kbd('9')} Ansicht · ${kbd('F9')} neu berechnen` : ''} · ${kbd('Esc')} schließt Dialoge.</p></section>
       </div>
     </div>`;

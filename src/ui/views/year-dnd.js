@@ -3,6 +3,7 @@ import { html } from '../dom.js';
 import { TSHORT, dayLabel, fmt, fmtS, nf, sgn } from '../format.js';
 import { IX, P, S, UI, commit, pName } from '../state.js';
 import { closeModal, openModal, toast } from '../dialogs.js';
+import { trace } from '../../platform/desktop.js';
 import { hideTip } from '../tooltip.js';
 import { ganttGeom } from './year.js';
 
@@ -12,7 +13,7 @@ import { ganttGeom } from './year.js';
  * auf einen Lehrgangsplatz setzen. Schon beim Ziehen zeigt jeder Tag, ob er frei ist und die Kapazität reicht;
  * beim Ablegen folgt die Prüfung – Konflikte werden nie stillschweigend eingetragen.
  * ========================================================================== */
-let drag = null, ghost = null;
+let drag = null, ghost = null, ghostW = 0, ghostH = 0, raf = 0, last = null;
 
 /** Was wird gezogen? Liefert Art, Dauer, Verlustfaktoren und ggf. den Termin bzw. Lehrgang. */
 function specOf(src) {
@@ -49,32 +50,44 @@ function evaluate(spec, p, day) {
 function clearPreview() { for (const el of document.querySelectorAll('.g-drop')) el.remove(); for (const el of document.querySelectorAll('.g-row.drop')) el.classList.remove('drop'); }
 function preview(row, res) {
   clearPreview();
-  const box = document.createElement('div'); box.className = 'g-drop';
+  const box = document.createElement('div'), pd = res.perDay, dw = ganttGeom.dw, gap = dw >= 3 ? 1 : 0; box.className = 'g-drop';
+  // aufeinanderfolgende Tage mit gleichem Befund als ein Streifen: wenige Elemente auch bei langen Maßnahmen
   let s = '';
-  for (const r of res.perDay) s += '<i class="' + r.state + '" style="left:' + (r.d * ganttGeom.dw).toFixed(1) + 'px;width:' + Math.max(2, ganttGeom.dw - (ganttGeom.dw >= 3 ? 1 : 0)).toFixed(1) + 'px"></i>';
+  for (let i = 0; i < pd.length;) {
+    let j = i; while (j + 1 < pd.length && pd[j + 1].state === pd[i].state && pd[j + 1].d === pd[j].d + 1) j++;
+    s += '<i class="' + pd[i].state + '" style="left:' + (pd[i].d * dw).toFixed(1) + 'px;width:' + Math.max(2, (j - i + 1) * dw - gap).toFixed(1) + 'px"></i>';
+    i = j + 1;
+  }
   box.innerHTML = s;
   row.querySelector('.g-track').append(box); row.classList.add('drop');
 }
 function showGhost(x, y, text, cls) {
   if (!ghost) { ghost = document.createElement('div'); ghost.id = 'dragGhost'; document.body.append(ghost); }
-  ghost.className = cls; ghost.textContent = text; ghost.hidden = false;
-  ghost.style.left = Math.min(x + 14, innerWidth - ghost.offsetWidth - 8) + 'px'; ghost.style.top = Math.min(y + 16, innerHeight - ghost.offsetHeight - 8) + 'px';
+  if (ghost.hidden || ghost.textContent !== text || ghost.className !== cls) { ghost.className = cls; ghost.textContent = text; ghost.hidden = false; ghostW = ghost.offsetWidth; ghostH = ghost.offsetHeight; }
+  ghost.style.transform = 'translate(' + Math.round(Math.min(x + 14, innerWidth - ghostW - 8)) + 'px,' + Math.round(Math.min(y + 16, innerHeight - ghostH - 8)) + 'px)';
 }
 const verdict = res => res.short ? ['crit', 'nicht genug freie Diensttage bis Jahresende'] : res.extra.length ? ['crit', res.extra[0]] : res.crit ? ['crit', res.crit + (res.crit === 1 ? ' Tag' : ' Tage') + ' nicht möglich'] : res.warn ? ['warn', res.warn + (res.warn === 1 ? ' Tag' : ' Tage') + ' unter 0-Punkt'] : ['ok', 'Kapazität reicht'];
 
-function update(e) {
-  const d = drag, row = d.spec.kind === 'event' ? d.home : rowAt(e.clientX, e.clientY);
-  d.target = null;
-  if (!row) { clearPreview(); return showGhost(e.clientX, e.clientY, d.spec.label + ' – auf eine Person im Jahresplan ziehen', ''); }
-  const p = personOf(row); if (!p) return;
-  if (Core.isLocked(p)) { clearPreview(); return showGhost(e.clientX, e.clientY, pName(p) + ' ist ausgeschlossen', 'crit'); }
-  const day = d.spec.kind === 'event' ? Core.clamp(dayAt(row, e.clientX) - d.grab, 0, IX.n - 1) : dayAt(row, e.clientX), res = evaluate(d.spec, p, day), [cls, text] = verdict(res);
-  d.target = { p, day, res };
-  preview(row, res);
-  showGhost(e.clientX, e.clientY, d.spec.label + ' · ' + pName(p) + (res.days.length ? ' · ' + fmtS(res.start) + ' – ' + fmt(res.end) + ' (' + res.days.length + ' T)' : '') + ' · ' + text, cls);
+/** Zeigt für die Zeigerstelle Ziel, Vorschau und Befund. Gerechnet wird nur, wenn sich Person oder Tag ändern. */
+function update(x, y) {
+  const d = drag, row = d.spec.kind === 'event' ? (d.home && d.home.isConnected ? d.home : null) : rowAt(x, y);
+  const idle = (key, text, cls) => { if (d.key !== key) { d.key = key; d.target = null; clearPreview(); } showGhost(x, y, text, cls); };
+  if (!row) return idle('-', d.spec.label + ' – auf eine Person im Jahresplan ziehen', '');
+  const p = personOf(row); if (!p) return idle('-', d.spec.label + ' – auf eine Person im Jahresplan ziehen', '');
+  if (Core.isLocked(p)) return idle('x' + p.pk, pName(p) + ' ist ausgeschlossen', 'crit');
+  const day = d.spec.kind === 'seat' ? 0 : d.spec.kind === 'event' ? Core.clamp(dayAt(row, x) - d.grab, 0, IX.n - 1) : dayAt(row, x), key = p.pk + '|' + day;
+  if (d.key !== key) {
+    d.key = key;
+    let res = d.cache.get(key); if (!res) { res = evaluate(d.spec, p, day); d.cache.set(key, res); }
+    const [cls, text] = verdict(res);
+    d.target = { p, day, res }; d.cls = cls;
+    d.text = d.spec.label + ' · ' + pName(p) + (res.days.length ? ' · ' + fmtS(res.start) + ' – ' + fmt(res.end) + ' (' + res.days.length + ' T)' : '') + ' · ' + text;
+    preview(row, res);
+  }
+  showGhost(x, y, d.text, d.cls);
   // am Rand weiterblättern
   const g = document.querySelector('#gantt'), r = g.getBoundingClientRect();
-  if (e.clientX > r.right - 36) g.scrollLeft += 24; else if (e.clientX < r.left + 250 && e.clientX > r.left + 232) g.scrollLeft -= 24;
+  if (x > r.right - 36) g.scrollLeft += 24; else if (x < r.left + 250 && x > r.left + 232) g.scrollLeft -= 24;
 }
 
 // ---------- Eintragen --------------------------------------------------------------------------
@@ -112,33 +125,57 @@ function ask(spec, p, day, res) {
 
 // ---------- Zeigerereignisse ------------------------------------------------------------------------
 document.addEventListener('pointerdown', e => {
+  if (drag) end(true);                                   // ein liegengebliebener Zug wird nie fortgesetzt
   if (UI.view !== 'year' || e.button !== 0 || !ganttGeom) return;
   const src = e.target.closest && e.target.closest('[data-drag]'); if (!src) return;
   const spec = specOf(src); if (!spec) return;
   const home = src.closest('.g-row');
-  drag = { spec, home, x: e.clientX, y: e.clientY, active: false, target: null, grab: spec.kind === 'event' && home ? dayAt(home, e.clientX) - ((IX.evDays.get(spec.event.id) || [0])[0]) : 0 };
+  drag = { spec, home, id: e.pointerId, x: e.clientX, y: e.clientY, active: false, target: null, key: '', text: '', cls: '', cache: new Map(),
+    grab: spec.kind === 'event' && home ? dayAt(home, e.clientX) - ((IX.evDays.get(spec.event.id) || [0])[0]) : 0 };
 });
+/** Höchstens einmal je Bild rechnen – egal, wie viele Bewegungen die Maus meldet. */
+function frame() {
+  raf = 0;
+  if (!drag || !drag.active || !last) return;
+  try { update(last.x, last.y); }
+  catch (err) { console.error(err); end(true); toast('Ziehen abgebrochen: ' + (err.message || err), 'crit'); }
+}
 document.addEventListener('pointermove', e => {
-  if (!drag) return;
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!(e.buttons & 1)) return end(true);                // Taste ist nicht mehr gedrückt: das Loslassen kam nicht an
   if (!drag.active) {
     if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
     if (drag.spec.kind === 'locked') { const label = drag.spec.label; drag = null; return toast('„' + label + '“ ist ein Lehrgang – Zeitraum und Teilnehmer ändern Sie unter „Lehrgänge“'); }
-    drag.active = true; hideTip(); document.body.classList.add('dragging');
+    drag.active = true; hideTip(); document.body.classList.add('dragging'); trace('Ziehen: ' + drag.spec.kind + ' ' + (drag.spec.type || ''));
   }
-  e.preventDefault(); update(e);
+  e.preventDefault();
+  last = { x: e.clientX, y: e.clientY };
+  if (!raf) raf = requestAnimationFrame(frame);
 });
-function end(cancel) {
-  const d = drag; drag = null;
-  if (!d || !d.active) return;
+function end(cancel, e) {
+  const d = drag;
+  if (!d) return;
+  if (d.active && !cancel) {
+    // die letzte Bewegung zählt, auch wenn ihr Bild noch nicht gerechnet ist
+    if (e) last = { x: e.clientX, y: e.clientY };
+    try { if (last) update(last.x, last.y); } catch (err) { console.error(err); cancel = true; toast('Ziehen abgebrochen: ' + (err.message || err), 'crit'); }
+  }
+  drag = null; last = null; if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  if (!d.active) return;
   clearPreview(); if (ghost) ghost.hidden = true; document.body.classList.remove('dragging');
   // der Klick, der auf das Loslassen folgt, soll den Balken nicht öffnen
   const eat = ev => { ev.stopPropagation(); ev.preventDefault(); };
   window.addEventListener('click', eat, { capture: true, once: true }); setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 0);
   if (cancel || !d.target) return;
+  trace('Ablegen: ' + d.spec.kind + ' ' + (d.spec.type || ''));
   const { p, day, res } = d.target;
   if (d.spec.kind === 'event' && res.days.length && res.days[0] === (IX.evDays.get(d.spec.event.id) || [])[0]) return;      // nicht bewegt
   if (res.ok) apply(d.spec, p, res, res.days.length === 1 ? ' · Kapazität ausreichend' : ' · Kapazität an allen ' + res.days.length + ' Tagen ausreichend'); else ask(d.spec, p, day, res);
 }
-document.addEventListener('pointerup', () => end(false));
-document.addEventListener('pointercancel', () => end(true));
+document.addEventListener('pointerup', e => { if (drag && e.pointerId === drag.id) end(false, e); });
+document.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.id) end(true); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && drag && drag.active) { e.stopPropagation(); end(true); } }, true);
+// Ein Zug endet auch dann sicher, wenn das Loslassen das Fenster nicht erreicht (Fensterwechsel, Kontextmenü, Systemdialog)
+window.addEventListener('blur', () => end(true));
+document.addEventListener('visibilitychange', () => { if (document.hidden) end(true); });
+document.addEventListener('contextmenu', e => { if (drag && drag.active) { e.preventDefault(); end(true); } }, true);

@@ -4,6 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,14 +18,24 @@ const PACKAGED = process.env.M1_APP || '';
 const ARGS = [...(PACKAGED ? [] : ['.']), '--user-data-dir=' + USER_DATA, ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
 let app, page;
 const errors = [];
+// In den Tests sucht das Programm höchstens nach einer neuen Version – geladen oder installiert wird nichts
+process.env.M1_UPDATE_DRY = '1';
 
-async function launch(extra = []) {
-  app = await _electron.launch({ cwd: ROOT, args: [...ARGS, ...extra], ...(PACKAGED ? { executablePath: PACKAGED } : {}) });
+async function launch(extra = [], env = {}) {
+  app = await _electron.launch({ cwd: ROOT, args: [...ARGS, ...extra], env: { ...process.env, ...env }, ...(PACKAGED ? { executablePath: PACKAGED } : {}) });
   page = await app.firstWindow();
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.waitForSelector('#main h1');
   return page;
+}
+/** Beendet das Programm und wartet, bis der Prozess wirklich fort ist – sonst weist die Einzelinstanz-Sperre den nächsten Start ab. */
+async function shutdown() {
+  if (!app) return;
+  const proc = app.process(), gone = new Promise(r => { if (proc.exitCode !== null || proc.signalCode !== null) r(); else proc.once('exit', r); });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(w => w.destroy())).catch(() => {});
+  await app.close().catch(() => {});
+  await gone; app = null;
 }
 const title = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle());
 const menu = (cmd, arg) => app.evaluate(({ BrowserWindow }, [c, a]) => BrowserWindow.getAllWindows()[0].webContents.send('m1:command', c, a), [cmd, arg]);
@@ -41,7 +52,7 @@ async function change(name) {
 }
 
 before(async () => { await launch(); });
-after(async () => { if (app) { await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().forEach(w => w.destroy())).catch(() => {}); await app.close().catch(() => {}); } fs.rmSync(TMP, { recursive: true, force: true }); });
+after(async () => { await shutdown(); fs.rmSync(TMP, { recursive: true, force: true }); });
 
 test('startet als Desktop-Programm aus dem Programmpaket', async () => {
   assert.equal(page.url(), 'app://cockpit/index.html');
@@ -281,6 +292,23 @@ test('Lehrgänge: beste Zeiträume berechnen, übernehmen und im Jahresplan nach
   await waitFor(async () => (await page.locator('#gantt .bar').count()) === bars + 1, 'neuer Balken im Jahresplan');
 });
 
+test('Ziehen im Jahresplan endet sicher, wenn das Loslassen nicht ankommt', async () => {
+  await menu('go', 'year');
+  const bar = page.locator('#gantt .bar.t-PracticalLogbook, #gantt .bar.t-FitCheck, #gantt .bar.t-ICA').first();
+  await bar.waitFor(); await bar.scrollIntoViewIfNeeded();
+  const b = await bar.boundingBox(), y = b.y + b.height / 2, count = await page.locator('#gantt .bar').count();
+  const dragging = () => page.evaluate(() => document.body.classList.contains('dragging') || !!document.querySelector('.g-drop') || !!document.querySelector('#dragGhost:not([hidden])'));
+  await page.mouse.move(b.x + 2, y); await page.mouse.down(); await page.mouse.move(b.x + 90, y, { steps: 6 });
+  await waitFor(dragging, 'Zug läuft');
+  assert.equal(await page.evaluate(() => document.querySelector('#tip').hidden), true, 'beim Ziehen bleibt das Hinweisfenster aus');
+  // die Taste ist nicht mehr gedrückt, das Loslassen hat das Fenster aber nie erreicht
+  await page.evaluate(([x, yy]) => document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, buttons: 0, clientX: x, clientY: yy, bubbles: true })), [b.x + 150, y]);
+  assert.equal(await dragging(), false, 'der Zug ist beendet');
+  await page.mouse.up();
+  assert.equal(await page.locator('#gantt .bar').count(), count, 'nichts wurde eingetragen');
+  assert.equal(await page.evaluate(() => document.querySelector('#modal').hidden), true);
+});
+
 test('Ausbildungswege und Anleitung sind vollständig', async () => {
   await menu('go', 'routes');
   assert.equal(await page.locator('.rt-card').count(), 6);
@@ -302,8 +330,7 @@ test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', asy
   await change('Mit-Wiederherstellung');
   await waitFor(() => fs.existsSync(rec), 'Wiederherstellungskopie');
   // Absturz simulieren: Fenster ohne Nachfrage zerstören, neu starten
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].destroy());
-  await app.close().catch(() => {});
+  await shutdown();
   await launch();
   await waitFor(async () => /Wiederherstellungskopie/.test(await toastText()), 'Angebot zur Wiederherstellung');
   await page.click('#toasts button');
@@ -327,4 +354,58 @@ test('„Nicht speichern“ schließt das Fenster und entfernt die Wiederherstel
   app = null;
   assert.ok(!fs.existsSync(path.join(USER_DATA, 'Wiederherstellung.m1cockpit')));
   assert.ok(!JSON.parse(fs.readFileSync(FILE, 'utf8')).years['2027'].school.some(s => s.name === 'Wird-verworfen'), 'Datei bleibt unverändert');
+});
+
+test('Fehleraufzeichnung: Programmfehler landen ohne Projektdaten im Protokoll', async () => {
+  if (!app) await launch();
+  const log = path.join(USER_DATA, 'Fehlerprotokoll.txt');
+  fs.rmSync(log, { force: true });
+  await page.evaluate(() => { setTimeout(() => { null.fehlt; }, 0); });
+  await waitFor(() => fs.existsSync(log), 'Eintrag im Fehlerprotokoll');
+  const text = fs.readFileSync(log, 'utf8');
+  assert.match(text, /Version \d+\.\d+\.\d+ {2}Oberfläche: Programmfehler: TypeError/);
+  assert.doesNotMatch(text, /Person \d{3}/, 'keine Namen im Protokoll');
+  errors.length = 0;                                   // der ausgelöste Fehler ist erwartet
+});
+
+test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreicht nur sein Ziel', async () => {
+  const state = () => page.evaluate(() => window.m1desktop.update.state());
+  // der Kanal der Aktualisierung weist jede fremde Adresse ab
+  const foreign = () => app.evaluate(({ session, net }) => new Promise(resolve => {
+    const req = net.request({ url: 'https://example.com/', session: session.fromPartition('electron-updater') });
+    req.on('response', () => resolve('offen')); req.on('error', e => resolve('blockiert ' + e.message)); req.end();
+  }));
+  if (PACKAGED) {
+    // fertiges Programm: die Aktualisierung ist eingebaut und fragt die Veröffentlichungen des Projekts
+    assert.equal((await state()).mode, 'install', 'das gepackte Programm kann sich selbst aktualisieren');
+    const st = await page.evaluate(() => window.m1desktop.update.check());
+    assert.ok(['current', 'available', 'error'].includes(st.phase), 'Suche endet mit einem Ergebnis: ' + st.phase);
+    assert.doesNotMatch(st.error, /app-update|ENOENT|Cannot find module/i, 'Aktualisierung ist vollständig eingebaut');
+    assert.match(await foreign(), /^blockiert/);
+    return;
+  }
+  // Quellstand: ein lokaler Server bietet eine höhere Version an
+  const yml = ['version: 99.0.0', 'files:', '  - url: M1-Qualifikationscockpit-99.0.0-Setup.exe', '    sha512: ' + 'A'.repeat(86) + '==', '    size: 1000',
+    'path: M1-Qualifikationscockpit-99.0.0-Setup.exe', 'sha512: ' + 'A'.repeat(86) + '==', "releaseDate: '2026-11-26T10:00:00.000Z'", ''].join('\n');
+  const hits = [];
+  const server = http.createServer((req, res) => { hits.push(req.url); if (/latest[\w-]*\.yml/.test(req.url)) { res.writeHead(200, { 'content-type': 'text/yaml' }); res.end(yml); } else { res.writeHead(404); res.end(); } });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  try {
+    await shutdown();
+    await launch([], { M1_UPDATE_URL: 'http://127.0.0.1:' + server.address().port + '/' });
+    assert.equal((await state()).mode, 'notify');
+    await menu('act', 'update-check');
+    await waitFor(async () => /Version 99\.0\.0 ist verfügbar/.test(await toastText()), 'Meldung der neuen Version');
+    assert.ok(hits.some(u => /latest[\w-]*\.yml/.test(u)), 'Versionsangabe wurde abgerufen');
+    await menu('go', 'data');
+    assert.match(await page.textContent('#updCard'), /Version 99\.0\.0 ist verfügbar/);
+    assert.match(await page.textContent('#updCard'), /Installierte Version \d+\.\d+\.\d+/);
+    assert.match(await foreign(), /^blockiert/);
+    // abschalten bleibt gespeichert
+    await page.uncheck('#updCard [data-chg="updates"]');
+    await waitFor(() => JSON.parse(fs.readFileSync(path.join(USER_DATA, 'einstellungen.json'), 'utf8')).updates === false, 'Einstellung gespeichert');
+    assert.equal((await state()).enabled, false);
+    await page.check('#updCard [data-chg="updates"]');
+    assert.deepEqual(errors, []);
+  } finally { server.close(); }
 });
