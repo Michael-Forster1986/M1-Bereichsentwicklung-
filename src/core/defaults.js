@@ -28,7 +28,7 @@ export const defaultLimits = () => ({
 });
 export const defaultSettings = year => ({
   start: firstMonday(year), cap: false, strict: false, confirmedOnly: false, goal: 'min', absenceLimit: null,
-  avoidSchool: false, stress: 0, sick: SICK_DEFAULT.slice(), hours: 7.5,
+  avoidSchool: false, stress: 0, sick: SICK_DEFAULT.slice(), hours: 7.5, courseBlocks: true,
   mentorLimit: null, tecLimit: null, examinerLimit: 1, allowPartial: true, preferZero: true, buffer: 0
 });
 export function emptyState(year = 2027) {
@@ -39,6 +39,6 @@ export function emptyState(year = 2027) {
       privacy: false, simulated: { roster: false, absences: false }, assumptions: [] },
     people: [], events: [], absences: [], holidays: [], school: year === 2027 ? clone(SCHOOL_BY_2027) : [],
     capacity: [], roster: {}, limits: defaultLimits(), config: defaultConfig(), routes: clone(DEFAULT_ROUTES),
-    settings: defaultSettings(year), report: [], planInfo: null, realImports: []
+    settings: defaultSettings(year), report: [], planInfo: null, realImports: [], courses: []
   };
 }

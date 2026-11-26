@@ -16,7 +16,7 @@ const zero = v => v ? nf(v) : html`<span class="muted">–</span>`;
 VIEWS.fullreport = {
   render() {
     const st = S.settings, r = SUM.route, hours = st.hours, today = new Date().toISOString().slice(0, 10), pi = S.planInfo;
-    const conf = [...CONF.values()], rep = S.report.slice().sort((a, b) => ORDER[a.status] - ORDER[b.status] || collator.compare(nameOf(a.pk), nameOf(b.pk)));
+    const conf = [...CONF.values()].filter(c => c.hard.length), rep = S.report.slice().sort((a, b) => ORDER[a.status] - ORDER[b.status] || collator.compare(nameOf(a.pk), nameOf(b.pk)));
     const evs = S.events.slice().sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : collator.compare(nameOf(a.pk), nameOf(b.pk)));
     const months = Core.monthlyFigures(S, IX, SUM), clusters = Core.clusterFigures(S, IX).filter(c => c.people > 0);
     const a = areaKnown(0) ? 0 : [1, 2].find(areaKnown) ?? 0, ks = [0, 1, 2].map(s => a * 3 + s), wz = SUM.worstZero, wm = SUM.worstMin;
@@ -78,6 +78,10 @@ VIEWS.fullreport = {
         ${rep.length ? html`<table class="tbl"><thead><tr><th>Person</th><th>Cluster</th><th>Ergebnis</th><th>Begründung</th><th>Noch offen</th></tr></thead><tbody>
           ${rep.map(x => { const p = IX.people.get(x.pk), s = REPORT_STATUS[x.status] || [x.status, '']; return html`<tr><td>${nameOf(x.pk)}</td><td class="muted">${p ? p.cluster : ''}</td><td class="nowrap">${pill(s[0], s[1])}</td><td>${x.reason}</td><td class="muted">${(x.remaining || []).join(', ')}</td></tr>`; })}</tbody></table>`
           : html`<div class="note">Noch kein Planungsergebnis – „Neu berechnen“ erzeugt den Bericht.</div>`}</section>
+
+      ${S.courses.length ? html`<section class="pb"><h2>Lehrgänge (${nf(S.courses.length)})</h2>
+        <table class="tbl"><thead><tr><th>Lehrgang</th><th>Art</th><th>Zeitraum</th><th class="n">Tage</th><th class="n">Teilnehmer</th><th>Wer</th></tr></thead><tbody>
+          ${S.courses.map(c => { const m = Core.courseMembers(S, c.id); return html`<tr><td><i class="sw ${tcls(c.type)}"></i> ${c.title}</td><td>${c.type}${c.target ? ' · ' + c.target : ''}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td class="n">${Core.courseDayList(IX, c).length}</td><td class="n">${m.length}${c.seats != null ? ' / ' + c.seats : ''}</td><td class="muted">${m.map(e => nameOf(e.pk)).sort(collator.compare).join(', ')}</td></tr>`; })}</tbody></table></section>` : ''}
 
       <section class="pb"><h2>7 · Terminliste (${nf(evs.length)})</h2>
         ${evs.length ? html`<table class="tbl"><thead><tr><th>Person</th><th>Maßnahme</th><th>Beginn</th><th>Ende</th><th class="n">Tage</th><th>Herkunft</th><th>Prüfung</th></tr></thead><tbody>

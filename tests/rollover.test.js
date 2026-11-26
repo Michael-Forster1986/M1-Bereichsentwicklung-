@@ -8,7 +8,7 @@ const plan = st => { const res = Core.optimizePlan(st, Core.buildIndex(st), { va
 describe('Vorleistung aus Vorjahren', () => {
   let st, p;
   beforeAll(() => {
-    st = Core.demoState({ year: 2027, count: 40, seed: 21 });
+    st = Core.demoState({ year: 2027, count: 40, seed: 21, courseBlocks: false });
     st.events = st.events.filter(e => !e.auto); st.report = [];
     st.settings.cap = false;                                     // Szenariomodus: die Grenzwerte der Vorgabe passen nur zu 141 Personen
     p = st.people.find(x => x.cluster === '2');                  // Weg: Logbook 30 · FitCheck 2 · ICA 1
@@ -56,7 +56,7 @@ describe('Vorleistung aus Vorjahren', () => {
 describe('Folgejahr anlegen', () => {
   let prev, ix, next, info;
   beforeAll(() => {
-    prev = Core.demoState({ year: 2027, count: 141, seed: 2027 }); ix = Core.buildIndex(prev);
+    prev = Core.demoState({ year: 2027, count: 141, seed: 2027, courseBlocks: false }); ix = Core.buildIndex(prev);    // Fassung mit begonnenen Wegen
     ({ state: next, info } = Core.rolloverYear(prev));
   });
   const state = p => Core.routeProgress(prev, ix, p).state;
@@ -155,5 +155,23 @@ describe('Folgejahr anlegen', () => {
     expect(back.years[2027].events).toHaveLength(prev.events.length);
     const three = Core.rolloverYear(back.years[2028]).state;
     expect(three.meta.year).toBe(2029); expect(three.settings.start).toBe('2029-01-01');
+  });
+});
+
+describe('Jahreswechsel mit Lehrgängen', () => {
+  it('rechnet einen besuchten Lehrgang als Vorleistung an – im Folgejahr fehlt nur noch der Rest', () => {
+    const prev = Core.demoState({});
+    const praxis = prev.courses.filter(c => c.type === 'Praxis' && c.target === 'A330').map(c => c.id);
+    for (const id of praxis) Core.removeCourse(prev, id);                            // Praxis findet erst im Folgejahr statt
+    const ix = Core.buildIndex(prev), half = prev.people.filter(p => p.target === 'A330' && p.level === 'TEC' && Core.routeProgress(prev, ix, p).state === 'partial');
+    expect(half.length).toBeGreaterThan(20);
+    const { state: next, info } = Core.rolloverYear(prev);
+    expect(info.continued).toBeGreaterThanOrEqual(half.length);
+    const q = next.people.find(x => x.pk === half[0].pk);
+    expect(q.credit).toEqual({ Theorie: 20 });
+    expect(next.courses).toEqual([]);                                                // Lehrgangstermine gehören zum alten Jahr
+    const nix = Core.buildIndex(next), need = Core.courseDemand(next, nix);
+    expect(need.find(g => g.type === 'Theorie' && g.target === 'A330').open).toEqual([]);
+    expect(need.find(g => g.type === 'Praxis' && g.target === 'A330').open).toContain(q.pk);
   });
 });

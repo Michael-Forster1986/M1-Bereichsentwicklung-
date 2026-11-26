@@ -1,4 +1,4 @@
-import { ABS_TYPES, AREAS, FORMAT, ROUTE_CLUSTERS, SHIFTS, TYPES } from './constants.js';
+import { ABS_TYPES, AREAS, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS, TYPES, isCourseType } from './constants.js';
 import { clamp, fin, kOf, num, uid } from './util.js';
 import { makeCalendar, normDate, validDate } from './dates.js';
 import { defaultLimits, emptyState } from './defaults.js';
@@ -20,7 +20,33 @@ function normEvent(e, known) {
   if (AREAS.includes(e.area) && !e.courseKind) out.area = e.area;
   for (const k of ['synthetic', 'partial']) if (e[k]) out[k] = true;
   for (const k of ['title', 'courseKind', 'note']) if (e[k]) out[k] = String(e[k]).slice(0, 200);
+  if (e.courseId) out.courseId = String(e.courseId).slice(0, 60);
   return out;
+}
+/** Prüft einen Lehrgangstermin (Art, Zeitraum, Plätze). */
+export function normCourse(c) {
+  if (!c || !isCourseType(c.type)) return null;
+  const start = normDate(c.start), end = normDate(c.end);
+  if (!start || !end || end < start) return null;
+  const seats = Math.round(num(c.seats));
+  return { id: String(c.id || uid()).slice(0, 60), type: c.type, title: String(c.title || c.type).trim().slice(0, 80) || c.type, target: TARGETS.includes(c.target) ? c.target : '',
+    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}) };
+}
+/**
+ * Bringt Lehrgänge und ihre Teilnehmertermine in Einklang: Termine ohne Lehrgang verlieren den Bezug, und
+ * Lehrgangstermine der Vorgängerfassung (gleiche Art, Bezeichnung und Zeitraum) werden zu einem Lehrgang gebündelt.
+ */
+export function linkCourses(st) {
+  const ids = new Set(st.courses.map(c => c.id)), byKey = new Map(st.courses.map(c => [c.type + '|' + c.title + '|' + c.start + '|' + c.end, c]));
+  for (const e of st.events) {
+    if (e.courseId && !ids.has(e.courseId)) delete e.courseId;
+    if (e.courseId || !e.courseKind || !isCourseType(e.type) || !e.title) continue;
+    const key = e.type + '|' + e.title + '|' + e.start + '|' + e.end;
+    let c = byKey.get(key);
+    if (!c) { c = { id: uid(), type: e.type, title: e.title, target: '', start: e.start, end: e.end, seats: null, fixed: true }; st.courses.push(c); byKey.set(key, c); ids.add(c.id); }
+    e.courseId = c.id;
+  }
+  st.courses.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : a.title < b.title ? -1 : 1);
 }
 /** Prüft und bereinigt eine Projektdatei des aktuellen Formats. */
 export function sanitize(x) {
@@ -63,9 +89,12 @@ export function sanitize(x) {
   S.stress = fin(xs.stress) ? clamp(xs.stress, 0, 50) : 0;
   S.buffer = fin(xs.buffer) ? clamp(xs.buffer, 0, 50) : 0;
   S.hours = fin(xs.hours) && xs.hours > 0 && xs.hours <= 24 ? xs.hours : 7.5;
+  S.courseBlocks = xs.courseBlocks !== false;
   if (Array.isArray(xs.sick) && xs.sick.length === 12 && xs.sick.every(v => fin(v) && v >= 0 && v <= 50)) S.sick = xs.sick.slice();
   st.report = (Array.isArray(x.report) ? x.report : []).filter(r => r && seen.has(String(r.pk))).map(r => ({ pk: String(r.pk), status: String(r.status || 'open'), reason: String(r.reason || '').slice(0, 400), ...(Array.isArray(r.remaining) ? { remaining: r.remaining.map(String) } : {}) }));
   st.planInfo = x.planInfo && typeof x.planInfo === 'object' ? { at: String(x.planInfo.at || ''), mode: String(x.planInfo.mode || ''), variant: String(x.planInfo.variant || ''), tried: num(x.planInfo.tried) } : null;
+  { const seenC = new Set(); st.courses = (Array.isArray(x.courses) ? x.courses : []).map(normCourse).filter(c => c && !seenC.has(c.id) && seenC.add(c.id)); }
+  linkCourses(st);
   st.realImports = (Array.isArray(x.realImports) ? x.realImports : []).map(r => ({ kind: String(r.kind || ''), start: String(r.start || ''), end: String(r.end || ''), file: String(r.file || '').slice(0, 160), at: String(r.at || '') }));
   return { state: st, warnings };
 }

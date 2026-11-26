@@ -1,9 +1,11 @@
-import { ABS_TYPES, AREAS, PATTERNS, PREP, SHIFTS, TYPES } from './constants.js';
+import { ABS_TYPES, AREAS, COURSE_TYPES, PATTERNS, PREP, SHIFTS, TARGETS, TYPES } from './constants.js';
 import { clamp, num, truthy, uid } from './util.js';
 import { addDays, fmtDE, makeCalendar, normDate } from './dates.js';
-import { assignAliases, normPerson, normShift, parseCluster } from './people.js';
+import { assignAliases, normPerson, parseCluster, normShift } from './people.js';
 import { decodeRoster, encodeRoster, rosterCode } from './roster.js';
-import { TEMPLATES, rowsToObjects } from './csv.js';
+import { TEMPLATES, normHead, rowsToObjects } from './csv.js';
+import { buildIndex } from './indexing.js';
+import { courseKey, joinCourse } from './courses.js';
 
 // ---------- Importprüfungen --------------------------------------------
 /** Liefert {rows, errors, warnings}. Fehler blockieren die Übernahme. */
@@ -180,4 +182,63 @@ export function checkEvents(st, objs, head) {
       trainee: f('trainee', type === PREP ? 0 : 1), mentor: f('mentor', 0), tec: f('tec', 0), examiner: f('examiner', 0), target: '' });
   });
   return { errors, warnings, rows };
+}
+
+// ---------- Lehrgangstermine ----------------------------------------------------
+/** Ordnet eine frei geschriebene Lehrgangsart (z. B. „TEC“, „CAT A“, „CAT Praxis“) einer Maßnahme des Ausbildungswegs zu. */
+export function courseTypeOf(text) {
+  const s = normHead(text);
+  if (!s) return '';
+  for (const t of COURSE_TYPES) if (normHead(t) === s) return t;
+  if (s.includes('prax') || s.includes('practical')) return 'Praxis';
+  if (s.includes('basic') || s === 'bk') return 'Basic Knowledge';
+  if (s.includes('fg650')) return 'FG650';
+  return 'Theorie';
+}
+/**
+ * Lehrgangstermine: je Zeile ein Termin (Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze).
+ * Mit Spalte pk steht je Zeile ein Teilnehmer; gleiche Art, Bezeichnung und Zeitraum bilden einen Lehrgang.
+ */
+export function checkCourses(st, objs, head) {
+  const errors = [], warnings = [], y = String(st.meta.year), known = new Set(st.people.map(p => p.pk)), byName = new Map(st.people.map(p => [p.name, p.pk])), map = new Map();
+  for (const f of ['start', 'end']) if (!head.includes(f)) errors.push('Spalte „' + f + '“ (Beginn / Ende) fehlt');
+  if (!head.includes('title') && !head.includes('type')) errors.push('Spalte „Lehrgang“ oder „Art“ fehlt');
+  if (errors.length) return { errors, warnings, courses: [], participants: 0 };
+  objs.forEach((r, i) => {
+    if (errors.length > 25) return;
+    const line = 'Zeile ' + (i + 2) + ': ', rawType = String(r.type ?? '').trim(), title = (String(r.title ?? '').trim() || rawType).slice(0, 80);
+    if (!title && !String(r.start ?? '').trim() && !String(r.end ?? '').trim()) return;
+    const s = normDate(r.start), e = normDate(r.end);
+    if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
+    if (!title) return errors.push(line + 'Bezeichnung oder Art fehlt');
+    const type = courseTypeOf(rawType || title), want = String(r.target ?? '').trim().toLowerCase();
+    const target = TARGETS.find(t => t.toLowerCase() === want) || TARGETS.find(t => !t.includes(' ') && title.toUpperCase().includes(t)) || '';
+    const key = type + '|' + title + '|' + s + '|' + e;
+    let c = map.get(key);
+    if (!c) map.set(key, c = { type, title, target, start: s, end: e, seats: null, fixed: true, pks: [] });
+    const seats = Math.round(num(String(r.seats ?? '').replace(',', '.')));
+    if (seats > 0) c.seats = clamp(seats, 1, 500);
+    let pk = String(r.pk ?? '').trim();
+    if (pk) {
+      if (!known.has(pk) && byName.has(pk)) pk = byName.get(pk);
+      if (!known.has(pk)) return warnings.push(line + 'unbekannte Person – der Termin wird übernommen, dieser Teilnehmer nicht');
+      if (!c.pks.includes(pk)) c.pks.push(pk);
+    }
+  });
+  const courses = [...map.values()].sort((a, b) => a.start < b.start ? -1 : 1);
+  for (const c of courses) if (c.seats != null && c.pks.length > c.seats) warnings.push(c.title + ' (' + fmtDE(c.start) + '): ' + c.pks.length + ' Teilnehmer bei ' + c.seats + ' Plätzen');
+  if (!courses.length && !errors.length) errors.push('Keine Lehrgangstermine gefunden');
+  return { errors, warnings, courses, participants: courses.reduce((n, c) => n + c.pks.length, 0) };
+}
+/** Übernimmt Lehrgangstermine; vorhandene (gleiche Art, Bezeichnung, Zeitraum) werden ergänzt statt verdoppelt. */
+export function applyCourses(st, chk) {
+  const info = { added: 0, updated: 0, participants: 0, removed: 0 }, byKey = new Map(st.courses.map(c => [courseKey(c), c]));
+  for (const c of chk.courses) {
+    let cur = byKey.get(courseKey(c));
+    if (cur) { if (c.seats != null) cur.seats = c.seats; if (c.target) cur.target = c.target; info.updated++; }
+    else { cur = { id: uid(), type: c.type, title: c.title, target: c.target, start: c.start, end: c.end, seats: c.seats, fixed: true }; st.courses.push(cur); byKey.set(courseKey(cur), cur); info.added++; }
+    if (c.pks.length) { const r = joinCourse(st, buildIndex(st), cur, c.pks); info.participants += r.added; info.removed += r.removed; }
+  }
+  st.courses.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : a.title < b.title ? -1 : 1);
+  return info;
 }

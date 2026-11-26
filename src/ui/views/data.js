@@ -1,9 +1,9 @@
 import * as Core from '../../core/index.js';
 import { csvDownload, download, pickFile, templateDownload } from '../files.js';
 import { $, html, raw } from '../dom.js';
-import { DATA_CLASS, fmt, fmtS, nf } from '../format.js';
+import { DATA_CLASS, fmt, fmtS, nf, opts, pill } from '../format.js';
 import { desktop, isDesktop } from '../../platform/desktop.js';
-import { CONF, DOC, IX, PRJ, S, SUM, autosaveOn, clearAutosave, commit, commitProject, privacy, projectClass, resetAll, setAutosave, years } from '../state.js';
+import { DOC, HARD, IX, PRJ, S, SUM, autosaveOn, clearAutosave, commit, commitProject, privacy, projectClass, resetAll, setAutosave, years } from '../state.js';
 import { recentFiles } from '../project-files.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, VIEWS } from '../registry.js';
@@ -15,7 +15,7 @@ const IMP = { from: '', to: '', gaps: false, complete: false };
 function impScope() { const y = S.meta.year; if (!IMP.from.startsWith(String(y))) IMP.from = y + '-01-01'; if (!IMP.to.startsWith(String(y))) IMP.to = y + '-12-31'; return { start: IMP.from, end: IMP.to }; }
 const fullYear = sc => sc.start === S.meta.year + '-01-01' && sc.end === S.meta.year + '-12-31';
 /** Vorschau mit Prüfergebnis; „Übernehmen“ nur ohne Fehler. */
-function importPreview({ title, file, facts, chk, apply, extra }) {
+export function importPreview({ title, file, facts, chk, apply, extra }) {
   const errs = chk.errors || [], warns = chk.warnings || [];
   openModal({ title, wide: true, body: html`
     <div class="cmp" style="grid-template-columns:1fr 1.4fr"><div class="h">Datei</div><div class="h">${file}</div>${facts.map(([k, v]) => html`<div>${k}</div><div class="n">${v}</div>`)}</div>
@@ -25,7 +25,106 @@ function importPreview({ title, file, facts, chk, apply, extra }) {
     footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok" ${errs.length ? raw('disabled') : ''}>Übernehmen</button>`,
     handlers: { ok: () => { const r = apply(); if (r !== false) closeModal(); } } });
 }
-async function readTable(file) {
+/** Liest eine Tabelle aus CSV oder Excel. Bei Excel zählt das Blatt, dessen Kopfzeile zu headTest passt – sonst das größte. */
+export async function readRows(file, headTest) {
+  if (/\.xlsx$/i.test(file.name)) {
+    const sheets = (await Core.readXlsx(file)).filter(x => x.rows.some(r => r.some(Boolean)));
+    if (!sheets.length) throw new Error('Die Excel-Datei enthält keine Daten');
+    let pick = null, at = 0;
+    if (headTest) for (const sh of sheets) { const i = sh.rows.findIndex((r, j) => j < 30 && headTest(r)); if (i >= 0) { pick = sh; at = i; break; } }
+    if (!pick) pick = sheets.slice().sort((a, b) => b.rows.length - a.rows.length)[0];
+    return { rows: pick.rows.slice(at).filter(r => r.some(Boolean)), note: 'Excel-Blatt „' + pick.name + '“' };
+  }
+  if (file.size > 30e6) throw new Error('Datei zu groß (max. 30 MB)');
+  return { rows: Core.parseCSV(await file.text()), note: 'CSV' };
+}
+
+// ---------- Urlaubsplan als Tabelle je Tag (Excel) -----------------------------------------
+// Eine Zeile je Person, eine Spalte je Tag, Kürzel in den Zellen. Was ein Kürzel bedeutet, wird hier zugeordnet.
+let MX = null;
+const MX_LABEL = { Urlaub: 'Urlaub', Krank: 'Krank', Sonstiges: 'Sonstige Abwesenheit', 'Früh': 'Dienst: Früh', 'Spät': 'Dienst: Spät', Nacht: 'Dienst: Nacht', Frei: 'Dienstfrei', '': 'nicht übernehmen' };
+const mxSummary = () => {
+  const m = MX.tables[MX.idx].m, rows = Core.matrixAbsences(m, MX.map), days = rows.reduce((n, r) => n + Math.round((Date.parse(r.end) - Date.parse(r.start)) / 864e5) + 1, 0);
+  const duty = [...m.codes].filter(([c]) => ['Früh', 'Spät', 'Nacht', 'Frei'].includes(MX.map[c])).reduce((n, x) => n + x[1], 0);
+  return nf(rows.length) + ' Abwesenheiten mit ' + nf(days) + ' Tagen für ' + nf(new Set(rows.map(r => r.pk)).size) + ' Personen' + (duty ? ' · ' + nf(duty) + ' Diensttage für den Dienstplan' : '');
+};
+function matrixDialog() {
+  const t = MX.tables[MX.idx], m = t.m, bad = m.errors.length > 0, codes = [...m.codes].sort((a, b) => b[1] - a[1]);
+  openModal({ title: 'Urlaubsplan prüfen', wide: true, body: html`
+    <div class="cmp" style="grid-template-columns:1fr 1.6fr"><div class="h">Datei</div><div class="h">${MX.file}</div>
+      <div>Tabellenblatt</div><div class="n">${MX.tables.length > 1 ? html`<select data-chg="m:sheet">${opts(MX.tables.map((x, i) => [i, x.name + (x.m.errors.length ? ' – nicht lesbar' : ' · ' + x.m.persons + ' Personen')]), MX.idx)}</select>` : t.name}</div>
+      ${bad ? '' : html`<div>Aufbau</div><div class="n">${m.layout}</div>
+      <div>Zeitraum</div><div class="n">${fmt(m.range.start)} – ${fmt(m.range.end)} · ${nf(m.dates.length)} Tage</div>
+      <div>Personen erkannt</div><div class="n">${nf(m.persons)} von ${nf(S.people.length)}</div>`}</div>
+    ${bad ? html`<div class="note crit"><b>Nicht übernehmbar:</b>${m.errors.map(e => html`<div>${e}</div>`)}<div style="margin-top:6px">Erwartet wird eine Tabelle mit einer Zeile je Person (Personalnummer oder Name vorn) und einer Spalte je Tag.</div></div>` : html`
+    <h3 style="margin:14px 0 4px;font-size:14px">Was bedeuten die Kürzel?</h3>
+    <p class="small ink2" style="margin-bottom:8px">Gefunden wurden ${nf(codes.length)} verschiedene Einträge. Der Vorschlag erkennt übliche Kürzel – bitte prüfen und anpassen. „Nicht übernehmen“ lässt die Zelle unbeachtet.</p>
+    <div class="tblwrap" style="max-height:260px"><table class="tbl"><thead><tr><th>Kürzel in der Tabelle</th><th class="n">Tage</th><th>Bedeutung</th></tr></thead><tbody>
+      ${codes.map(([c, n]) => html`<tr><td><b>${c}</b></td><td class="n">${nf(n)}</td><td><select data-chg="m:map" data-c="${c}">${opts(Core.MATRIX_TARGETS.filter(x => MX.roster || !['Früh', 'Spät', 'Nacht', 'Frei'].includes(x)).map(x => [x, MX_LABEL[x]]), MX.map[c] || '')}</select></td></tr>`)}</tbody></table></div>
+    <label class="c" style="margin-top:10px"><input type="checkbox" data-chg="m:roster" ${MX.roster ? raw('checked') : ''}> Die Tabelle enthält auch die Dienste (F, S, N …) – Dienstplan für diese Tage mit übernehmen</label>
+    <div class="note good" style="margin-top:10px">Ergebnis: <b id="mxSum">${mxSummary()}</b></div>
+    ${m.warnings.length ? html`<div class="note warn">${m.warnings.slice(0, 8).map(w => html`<div>${w}</div>`)}</div>` : ''}
+    <p class="small ink2" style="margin-top:8px">Für die Personen der Tabelle ersetzen die Einträge im Zeitraum ${fmtS(m.range.start)} – ${fmt(m.range.end)} alle bisherigen Abwesenheiten, auch die simulierten. Wer nicht in der Tabelle steht, bleibt unverändert. Es wird nichts übertragen – die Datei bleibt ${isDesktop ? 'auf diesem Rechner' : 'in diesem Browserfenster'}.</p>`}`,
+    footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok" ${bad ? raw('disabled') : ''}>Urlaubsplan übernehmen</button>`,
+    handlers: {
+      sheet: el => { MX.idx = +el.value; MX.map = Core.defaultCodeMap([...MX.tables[MX.idx].m.codes.keys()], MX.roster); matrixDialog(); },
+      roster: el => { MX.roster = el.checked; const fresh = Core.defaultCodeMap([...m.codes.keys()], MX.roster); for (const c of Object.keys(fresh)) if (!MX.map[c] || !MX.roster) MX.map[c] = !MX.roster && ['Früh', 'Spät', 'Nacht', 'Frei'].includes(MX.map[c]) ? '' : MX.map[c] || fresh[c]; matrixDialog(); },
+      map: el => { MX.map[el.dataset.c] = el.value; const out = $('#mxSum'); if (out) out.textContent = mxSummary(); },
+      ok: () => {
+        let info; const name = MX.file, map = MX.map;
+        closeModal();
+        commit('', () => { info = Core.applyDayMatrix(S, m, map); S.realImports.push({ kind: 'absences', start: m.range.start, end: m.range.end, file: name, at: new Date().toISOString() }); if (info.rosterDays) S.realImports.push({ kind: 'roster', start: m.range.start, end: m.range.end, file: name, at: new Date().toISOString() }); });
+        MX = null;
+        toast('Urlaubsplan übernommen: ' + nf(info.absences) + ' Abwesenheiten mit ' + nf(info.days) + ' Tagen' + (info.rosterDays ? ' · ' + nf(info.rosterDays) + ' Diensttage' : '') + ' · ' + nf(HARD) + ' Termine mit Konflikt' + (HARD ? ' – siehe Bericht' : ''), '', HARD ? { label: 'Zum Bericht', run: () => go('report') } : null);
+      } } });
+}
+ACT['imp-matrix'] = async () => {
+  if (!S.people.length) return toast('Zuerst Stammdaten laden', 'crit');
+  const file = await pickFile('.xlsx,.csv,.txt'); if (!file) return;
+  let tables;
+  if (/\.xlsx$/i.test(file.name)) tables = (await Core.readXlsx(file)).filter(x => x.rows.some(r => r.some(Boolean))).map(x => ({ name: x.name, rows: x.rows }));
+  else { if (file.size > 30e6) throw new Error('Datei zu groß (max. 30 MB)'); tables = [{ name: 'CSV', rows: Core.parseCSV(await file.text()) }]; }
+  if (!tables.length) throw new Error('Die Datei enthält keine Daten');
+  for (const t of tables) t.m = Core.parseDayMatrix(S, t.rows);
+  const score = t => t.m.errors.length ? 0 : t.m.persons * t.m.dates.length;
+  let idx = 0; tables.forEach((t, i) => { if (score(t) > score(tables[idx])) idx = i; });
+  MX = { file: file.name, tables, idx, roster: false, map: Core.defaultCodeMap([...tables[idx].m.codes.keys()], false) };
+  matrixDialog();
+};
+
+// ---------- Echtbetrieb ----------------------------------------------------------------------
+/** Karte „Bereit für die echte Planung?“ – zeigt je Baustein, ob reale Daten vorliegen. */
+function liveCard() {
+  const items = Core.readiness(S, IX, SUM), parts = Core.simulatedParts(S), sim = parts.absences + parts.scenario + parts.courses;
+  const icon = { good: ['good', '✓'], warn: ['warn', '!'], crit: ['crit', '!'], info: ['', 'i'] }, open = items.filter(x => x.state === 'warn' || x.state === 'crit').length;
+  return html`<div class="card" style="margin-bottom:14px" id="liveCard"><div class="row"><h3 style="font-size:14.5px;font-weight:650">Bereit für die echte Planung?</h3>${open ? pill(open + (open === 1 ? ' Punkt offen' : ' Punkte offen'), 'warn') : pill('alles bereit', 'good')}<span class="sp"></span>
+      <button class="btn sm primary" data-act="imp-matrix" data-tip="Excel-Tabelle mit einer Zeile je Person und einer Spalte je Tag (Kürzel wie U, K)">Urlaubsplan einspielen</button>
+      <button class="btn sm" data-act="go-courses">Lehrgänge</button>
+      <button class="btn sm" data-act="go-live" ${sim || parts.auto ? '' : raw('disabled')} data-tip="Entfernt simulierte Abwesenheiten, Szenariotermine und berechnete Termine – Personen, Qualifikationen und Cluster bleiben">Simulierte Daten entfernen …</button></div>
+    <div class="sub" style="color:var(--ink-2);font-size:12.5px;margin:2px 0 8px">Personen mit Qualifikationen und Clusterzuordnung bleiben immer erhalten. Belastbar wird die Planung mit realem Urlaubsplan, eingespielten Lehrgängen und – sobald er vorliegt – dem echten Dienstplan.</div>
+    <ul class="hints">${items.map(x => html`<li><span class="ic ${icon[x.state][0]}">${icon[x.state][1]}</span><span class="grow"><b>${x.title}.</b> ${x.text}</span><button class="btn sm" data-act="go" data-id="${x.view}">${x.view === 'data' ? 'unten' : 'Öffnen'}</button></li>`)}</ul></div>`;
+}
+ACT['go-courses'] = () => go('courses');
+ACT['go-live'] = () => {
+  const p = Core.simulatedParts(S), row = (id, n, label, on = true) => html`<label class="c"><input type="checkbox" id="${id}" ${n && on ? raw('checked') : ''} ${n ? '' : raw('disabled')}> <span>${label} <b>(${nf(n)})</b></span></label>`;
+  openModal({ title: 'Simulierte Daten entfernen', wide: true, body: html`
+    <p class="ink2">Damit stellen Sie von der Erprobung auf die echte Planung um. <b>Erhalten bleiben immer:</b> alle ${nf(S.people.length)} Personen mit Qualifikationen, Cluster, Ziel und Vorleistungen sowie Ausbildungswege, Grenzwerte, Feiertage und Einstellungen.</p>
+    <div class="stack" style="gap:9px;margin:12px 0">
+      ${row('glAbs', p.absences, 'Simulierte Abwesenheiten entfernen – danach den realen Urlaubsplan einspielen')}
+      ${row('glScen', p.scenario + p.courses, 'Szenariotermine und Szenario-Lehrgänge entfernen (' + nf(p.courses) + ' Lehrgänge) – danach reale Lehrgangstermine einspielen')}
+      ${row('glAuto', p.auto, 'Berechnete Termine entfernen – der Plan wird mit den realen Daten neu berechnet')}
+      ${row('glRoster', p.roster, 'Simulierten Dienstplan entfernen – nur sinnvoll, wenn der echte Dienstplan gleich eingespielt wird', false)}</div>
+    <div class="note">Solange kein echter Dienstplan vorliegt, lassen Sie den simulierten Schichtrhythmus stehen: Die Kapazität bleibt dann eine Näherung und ist als „simuliert“ gekennzeichnet. Mit „Rückgängig“ kommen Sie zurück.</div>`,
+    footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary danger" data-act="m:ok">Entfernen</button>`,
+    handlers: { ok: () => {
+      const o = { absences: $('#glAbs').checked, scenario: $('#glScen').checked, auto: $('#glAuto').checked, roster: $('#glRoster').checked };
+      if (!Object.values(o).some(Boolean)) return toast('Nichts ausgewählt', 'crit');
+      closeModal(); let done;
+      commit('', () => { done = Core.removeSimulated(S, o); });
+      toast('Entfernt: ' + [[done.absences, 'Abwesenheiten'], [done.scenario, 'Szenariotermine'], [done.courses, 'Szenario-Lehrgänge'], [done.auto, 'berechnete Termine'], [done.roster, 'Dienstpläne']].filter(x => x[0]).map(x => nf(x[0]) + ' ' + x[1]).join(', ') + '. Personen und Cluster sind unverändert.');
+    } } });
+};
+export async function readTable(file) {
   if (/\.xlsx$/i.test(file.name)) { const t = Core.xlsxPeopleTable(await Core.readXlsx(file)); return { rows: t.rows, note: 'Excel-Blatt „' + t.sheet + '“' }; }
   if (file.size > 30e6) throw new Error('Datei zu groß (max. 30 MB)');
   return { rows: Core.parseCSV(await file.text()), note: 'CSV' };
@@ -56,7 +155,7 @@ ACT['imp-roster'] = async () => {
   importPreview({ title: 'Dienstplan prüfen', file: file.name, chk, facts: [['Format', chk.format || '–'], ['Zeitraum', fmt(sc.start) + ' – ' + fmt(sc.end)], ['Personen in der Datei', nf(chk.persons || 0) + ' von ' + nf(S.people.length)], ['Personentage', nf(chk.cells || 0) + ' von ' + nf(chk.expected || 0)]],
     extra: html`<p class="small ink2">Im gewählten Zeitraum ersetzt die Datei den bisherigen Dienstplan vollständig; außerhalb bleibt er erhalten. Termine bleiben stehen und werden sofort auf Konflikte geprüft.</p>`,
     apply: () => { commit('', () => { Core.applyRoster(S, chk); if (fullYear(sc)) S.meta.simulated.roster = false; S.realImports.push({ kind: 'roster', start: sc.start, end: sc.end, file: file.name, at: new Date().toISOString() }); });
-      toast('Dienstplan übernommen · ' + nf(CONF.size) + ' Termine mit Konflikt' + (CONF.size ? ' – siehe Bericht' : '')); } });
+      toast('Dienstplan übernommen · ' + nf(HARD) + ' Termine mit Konflikt' + (HARD ? ' – siehe Bericht' : '')); } });
 };
 ACT['imp-absences'] = async () => {
   if (!S.people.length) return toast('Zuerst Stammdaten laden', 'crit');
@@ -66,7 +165,7 @@ ACT['imp-absences'] = async () => {
   importPreview({ title: 'Abwesenheiten prüfen', file: file.name, chk, facts: [['Zeitraum', fmt(sc.start) + ' – ' + fmt(sc.end)], ['Abwesenheiten in der Datei', nf(chk.rows.length)], ['Betroffene Personen', nf(new Set(chk.rows.map(r => r.pk)).size)]],
     extra: html`<p class="small ink2">Im gewählten Zeitraum ersetzt die Datei alle bisherigen Abwesenheiten; kein Eintrag bedeutet keine Abwesenheit. Zeiträume, die über die Grenzen hinausreichen, werden abgeschnitten.</p>`,
     apply: () => { commit('', () => { Core.applyAbsences(S, chk); if (fullYear(sc)) S.meta.simulated.absences = false; S.realImports.push({ kind: 'absences', start: sc.start, end: sc.end, file: file.name, at: new Date().toISOString() }); });
-      toast('Abwesenheiten übernommen · ' + nf(CONF.size) + ' Termine mit Konflikt' + (CONF.size ? ' – siehe Bericht' : '')); } });
+      toast('Abwesenheiten übernommen · ' + nf(HARD) + ' Termine mit Konflikt' + (HARD ? ' – siehe Bericht' : '')); } });
 };
 ACT['imp-capacity'] = async () => {
   const file = await pickFile('.csv,.txt'); if (!file) return;
@@ -137,6 +236,7 @@ VIEWS.data = {
       <div class="kpi"><div class="l">Kapazität</div><div class="v">${nf(SUM.knownDays)}</div><div class="s">prüfbare Diensttage · ${S.capacity.length ? 'Tageswerte' : 'aus Dienstplan'}</div></div>
       <div class="kpi"><div class="l">Kalender</div><div class="v">${nf(S.holidays.length)}</div><div class="s">Feiertage · ${nf(S.school.length)} Ferienzeiträume</div></div>
     </div>
+    ${S.people.length ? liveCard() : ''}
     <div class="card" style="margin-bottom:14px"><h3>1 · Vorhandenen Stand übernehmen</h3><div class="sub">Der schnellste Weg von der Vorgängerversion: deren HTML-Datei oder JSON-Sicherung direkt laden – Personen, Dienstplan, Abwesenheiten, Termine, Wege und Einstellungen kommen vollständig mit.</div>
       <div class="row"><button class="btn primary" data-act="load-project">${isDesktop ? 'Projekt oder Vorgänger-Datei öffnen' : 'Projektdatei oder Vorgänger-Datei laden'}</button><span class="small muted">Formate: Projektdatei (.m1cockpit, .json) · Einzeldatei-Fassung als .json oder .html · „M1 Jahressimulation“ 3.x als .html oder .json</span></div>
       ${recentFiles().length ? html`<div class="row small" style="margin-top:10px"><span class="ink2">Zuletzt geöffnet:</span>${recentFiles().slice(0, 5).map(f => html`<button class="btn sm" data-act="open-recent" data-i="${f.index}" data-tip="${f.dir}">${f.name}</button>`)}</div>` : ''}</div>
@@ -149,8 +249,9 @@ VIEWS.data = {
         ${card('Stammdaten', 'Personalnummer, Name, Cluster, Ziel und Berechtigungen. CSV oder Excel (Blatt mit Spalte „Personalnummer“). Auch als reines Cluster-Update nutzbar.', html`<button class="btn" data-act="imp-people">Datei wählen</button>${tpl('people')}`)}
         ${card('Dienstplan', 'Liste (pk; date; area; shift) oder Matrix mit einer Zeile je Person und einer Spalte je Datum. Dienste: Früh, Spät, Nacht, Frei oder F / S / N / OFF.', html`<button class="btn" data-act="imp-roster">Datei wählen</button>${tpl('roster')}<button class="btn sm" data-act="exp-roster" data-tip="Aktueller Dienstplan im gewählten Zeitraum als bearbeitbare CSV">Arbeitsvorlage</button>`,
           html`<label class="c small"><input type="checkbox" data-chg="imp" data-f="gaps" ${IMP.gaps ? raw('checked') : ''}> Lücken zulassen (fehlende Personentage bleiben ohne Zuordnung)</label>`)}
-        ${card('Urlaub und Abwesenheiten', 'pk; start; end; type mit Urlaub, Krank oder Sonstiges. Zeiträume einschließlich Start und Ende.', html`<button class="btn" data-act="imp-absences">Datei wählen</button>${tpl('absences')}`,
-          html`<label class="c small"><input type="checkbox" data-chg="imp" data-f="complete" ${IMP.complete ? raw('checked') : ''}> Datei enthält alle Abwesenheiten aller Personen im Zeitraum</label>`)}
+        ${card('Urlaubsplan und Abwesenheiten', 'Am einfachsten: die Excel-Tabelle des Urlaubsplans (eine Zeile je Person, eine Spalte je Tag, Kürzel wie U oder K). Alternativ eine Liste pk; start; end; type.', html`<button class="btn primary" data-act="imp-matrix">Excel-Tabelle je Tag</button><button class="btn" data-act="imp-absences">Liste (Von/Bis)</button>${tpl('absences')}`,
+          html`<label class="c small"><input type="checkbox" data-chg="imp" data-f="complete" ${IMP.complete ? raw('checked') : ''}> Nur für die Liste: Datei enthält alle Abwesenheiten aller Personen im Zeitraum</label>`)}
+        ${card('Lehrgangstermine', 'Feste Termine der Lehrgänge: Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze – optional je Zeile ein Teilnehmer. CSV oder Excel.', html`<button class="btn" data-act="crs-import">Datei wählen</button><button class="btn sm" data-act="crs-tpl">Leere Vorlage</button><button class="btn sm" data-act="go-courses">Zum Modul Lehrgänge</button>`)}
         ${card('Feste Termine', 'Gebuchte Kurse und andere feste Maßnahmen: pk; type; title; start; end und optional die Verlustfaktoren.', html`<button class="btn" data-act="imp-events">Datei wählen</button>${tpl('events')}`)}
         ${card('Tageskapazität (optional)', 'Eigene Tageswerte statt der Ableitung aus dem Dienstplan: date; area; shift; net; min; zero; checked.', html`<button class="btn" data-act="imp-capacity">Datei wählen</button>${tpl('capacity')}`)}
         ${card('Ferien', 'name; start; end – ersetzt die hinterlegten Ferienzeiträume.', html`<button class="btn" data-act="imp-school">Datei wählen</button>${tpl('school')}`)}

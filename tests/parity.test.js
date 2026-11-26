@@ -13,14 +13,15 @@ describe('öffentliche Schnittstelle', () => {
     expect(Object.keys(Core).sort()).toEqual(expect.arrayContaining(Object.keys(Old).sort()));
   });
   it('Konstanten sind identisch', () => {
-    for (const k of ['FORMAT', 'VERSION', 'EPS', 'AREAS', 'SHIFTS', 'TYPES', 'LOGBOOK', 'PREP', 'CLUSTERS', 'ROUTE_CLUSTERS', 'DEFAULT_ROUTES', 'ABS_TYPES', 'TARGETS', 'LEVELS', 'PATTERNS', 'TEMPLATES'])
+    for (const k of ['FORMAT', 'VERSION', 'EPS', 'AREAS', 'SHIFTS', 'TYPES', 'LOGBOOK', 'PREP', 'CLUSTERS', 'ROUTE_CLUSTERS', 'DEFAULT_ROUTES', 'ABS_TYPES', 'TARGETS', 'LEVELS', 'PATTERNS'])
       expect(Core[k], k).toEqual(Old[k]);
+    expect(Core.TEMPLATES).toMatchObject(Old.TEMPLATES);                 // neue Vorlagen (Lehrgangstermine) kommen hinzu
   });
   it('Vorgaben sind identisch', () => {
     expect(Core.defaultConfig()).toEqual(Old.defaultConfig());
     expect(Core.defaultLimits()).toEqual(Old.defaultLimits());
     for (const y of [2026, 2027, 2028, 2032]) {
-      expect(Core.defaultSettings(y)).toEqual(Old.defaultSettings(y));
+      expect({ ...Core.defaultSettings(y), courseBlocks: undefined }).toEqual({ ...Old.defaultSettings(y), courseBlocks: undefined });
       expect(Core.holidaysBavaria(y)).toEqual(Old.holidaysBavaria(y));
       expect(normalizeState(Core.emptyState(y))).toEqual(normalizeState(Old.emptyState(y)));
     }
@@ -29,7 +30,8 @@ describe('öffentliche Schnittstelle', () => {
 
 describe.each(CASES)('Demo-Daten Jahr $year, $count Personen, Startwert $seed', opt => {
   let a, b, ixA, ixB;
-  beforeAll(() => { a = Core.demoState(opt); b = Old.demoState(opt); ixA = Core.buildIndex(a); ixB = Old.buildIndex(b); });
+  // courseBlocks: false = Planung wie in der Einzeldatei (Kurse tageweise); der Blockmodus hat eigene Tests
+  beforeAll(() => { a = Core.demoState({ ...opt, courseBlocks: false }); b = Old.demoState(opt); ixA = Core.buildIndex(a); ixB = Old.buildIndex(b); });
 
   it('erzeugt denselben Zustand samt Jahresplan', () => {
     expect(normalizeState(a)).toEqual(normalizeState(b));

@@ -1,7 +1,7 @@
 import { isDesktop } from '../platform/desktop.js';
 import { $, $$, html, raw, setHTML } from './dom.js';
 import { DATA_CLASS, nf } from './format.js';
-import { CONF, LS, S, UI, autosave, dirty, future, hist, privacy, redo, store, undo } from './state.js';
+import { HARD, LS, S, UI, autosave, dirty, future, hist, privacy, redo, store, undo } from './state.js';
 import { toast } from './dialogs.js';
 import { ACT, VIEWS } from './registry.js';
 import { hideTip } from './tooltip.js';
@@ -65,7 +65,7 @@ export function renderTop() {
     <button class="btn hide-xs" data-act="toggle-theme" aria-label="Hell oder dunkel" data-tip="Hell / Dunkel">◐</button>`);
 }
 function renderRail() {
-  const cnt = { report: CONF.size ? [CONF.size, 'crit'] : null, people: [S.people.length, ''], events: [S.events.length, ''] };
+  const cnt = { report: HARD ? [HARD, 'crit'] : null, people: [S.people.length, ''], events: [S.events.length, ''] };
   setHTML($('#rail'), NAV.map(([group, items]) => html`<h4>${group}</h4>${items.map(([id, label]) => html`
     <button data-act="go" data-id="${id}" ${UI.view === id || (id === 'report' && UI.view === 'fullreport') ? raw('aria-current="page"') : ''}>${label}${cnt[id] ? html`<span class="cnt ${cnt[id][1]}">${nf(cnt[id][0])}</span>` : ''}</button>`)}`));
 }

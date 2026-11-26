@@ -44,7 +44,7 @@ ACT['year-add'] = () => {
       <label class="c"><input type="checkbox" id="yrRoster" ${pre.roster ? raw('checked') : raw('disabled')}> Dienstplan um 52 Wochen fortschreiben – als „simuliert“ gekennzeichnet, bis der echte Dienstplan ${to} geladen ist</label>
       <label class="c"><input type="checkbox" id="yrHolidays" checked> Gesetzliche Feiertage Bayern ${to} eintragen – bitte mit dem Betriebskalender abgleichen</label>
     </div>
-    <div class="note" style="margin-top:12px">Ausbildungswege, Grenzwerte, Krankenreserve und Einstellungen werden kopiert. <b>Nicht</b> übernommen werden Termine, Abwesenheiten, Tageskapazitäten und Ferien – sie gehören zum Jahr ${from}. Eine geplante Maßnahme gilt beim Jahreswechsel als erbracht; ändert sich der Plan ${from} später, gleichen Sie die Vorleistungen unter „Daten & Datenschutz“ neu ab.</div>`,
+    <div class="note" style="margin-top:12px">Ausbildungswege, Grenzwerte, Krankenreserve und Einstellungen werden kopiert. <b>Nicht</b> übernommen werden Termine, Lehrgänge, Abwesenheiten, Tageskapazitäten und Ferien – sie gehören zum Jahr ${from}. Eine geplante Maßnahme gilt beim Jahreswechsel als erbracht; ändert sich der Plan ${from} später, gleichen Sie die Vorleistungen unter „Daten & Datenschutz“ neu ab.</div>`,
     footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Planungsjahr ${to} anlegen</button>`,
     handlers: { ok: () => {
       const opt = { reopen: $('#yrReopen').checked, credit: $('#yrCredit').checked, roster: $('#yrRoster').checked, holidays: $('#yrHolidays').checked };

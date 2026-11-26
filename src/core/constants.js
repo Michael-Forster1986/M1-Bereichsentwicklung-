@@ -5,6 +5,9 @@ export const SHIFTS = ['Früh', 'Spät', 'Nacht'];
 export const LOGBOOK = 'Practical Logbook', PREP = 'Vorbereitung';
 export const TYPES = ['Basic Knowledge', 'FG650', 'Theorie', 'Praxis', LOGBOOK, 'FitCheck', PREP, 'ICA'];
 export const GATE_TYPES = new Set(['Praxis', 'Theorie', 'Basic Knowledge']);
+/** Maßnahmen, die als Lehrgang stattfinden: immer ein zusammenhängender Block für eine Gruppe. */
+export const COURSE_TYPES = ['Theorie', 'Praxis', 'Basic Knowledge', 'FG650'];
+export const isCourseType = t => COURSE_TYPES.includes(t);
 export const CLUSTERS = {
   '1': 'CAB-Erstentwicklung',
   '2': 'Frühauslerner → CAT A',

@@ -3,6 +3,7 @@ import { kArea, kShift, num } from './util.js';
 import { isoWeek } from './dates.js';
 import { buildIndex, capInfo } from './indexing.js';
 import { findConflicts } from './conflicts.js';
+import { courseDayList, courseMembers } from './courses.js';
 import { routeProgress, summarize } from './summary.js';
 
 // ---------- Berichte: Kennzahlen und Tabellen für Excel und PDF ----------------
@@ -44,7 +45,7 @@ export function clusterFigures(st, ix) {
 export function yearFigures(st) {
   const ix = buildIndex(st), sum = summarize(st, ix);
   return { year: st.meta.year, people: sum.people, eligible: sum.eligible, complete: sum.route.complete, partial: sum.route.partial, none: sum.route.none,
-    events: sum.events, trainingDays: sum.trainingDays, conflicts: findConflicts(st, ix).length, underMin: sum.underMin, underZero: sum.underZero, knownDays: sum.knownDays,
+    events: sum.events, trainingDays: sum.trainingDays, conflicts: findConflicts(st, ix).filter(c => c.hard.length).length, underMin: sum.underMin, underZero: sum.underZero, knownDays: sum.knownDays,
     mentor: sum.resources.mentor, tec: sum.resources.tec, examiner: sum.resources.examiner + sum.resources.prep, dataClass: st.meta.dataClass, planned: st.planInfo && st.planInfo.at ? st.planInfo.at.slice(0, 10) : '' };
 }
 export const capStatus = c => !c.known ? 'nicht prüfbar' : c.net < c.min - EPS ? 'unter Minimum' : c.net < c.zero - EPS ? 'unter 0-Punkt' : 'ab 0-Punkt';
@@ -81,7 +82,7 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
     kv('Wege teilweise geplant', sum.route.partial, 'int'), kv('Wege ohne Termine', sum.route.none, 'int'), kv('Cluster offen', sum.route.unassigned, 'int'), kv('Ausgeschlossen', sum.route.locked, 'int'), [],
     head('Termine'),
     kv('Termine gesamt', sum.events, 'int'), kv('davon berechnet', sum.auto, 'int'), kv('davon fixiert', sum.fixed, 'int'), kv('davon Szenario (simuliert)', sum.scenario, 'int'),
-    kv('Ausbildungstage', sum.trainingDays, 'int'), kv('Termine mit Konflikten', conf.length, 'int'), [],
+    kv('Ausbildungstage', sum.trainingDays, 'int'), kv('Termine mit Konflikten', conf.filter(c => c.hard.length).length, 'int'), [],
     head('Kapazität'),
     kv('Geprüfte Diensttage (Bereich × Dienst)', sum.knownDays, 'int'), kv('Diensttage unter Minimum', { v: sum.underMin, type: 'int', fill: sum.underMin ? 'crit' : '' }),
     kv('Diensttage unter 0-Punkt', { v: sum.underZero, type: 'int', fill: sum.underZero ? 'warn' : '' }),
@@ -133,6 +134,16 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
   rows: evs.map(e => { const cf = confById.get(e.id), hard = cf ? cf.hard.map(h => h[0] + (h[1] > 1 ? ' (' + h[1] + ' Tage)' : '')).join(', ') : '';
     return [...person(e.pk), e.type, e.title || '', e.start, e.end, (ix.evDays.get(e.id) || []).length, originOf(e), e.partial ? 'ja' : '', e.trainee, e.mentor, e.tec, e.examiner,
       { v: hard, fill: hard ? 'crit' : '' }, cf ? cf.soft.map(h => h[0] + ' (' + h[1] + ')').join(', ') : '']; }) });
+
+  // Lehrgänge: je Teilnehmer eine Zeile; Lehrgänge ohne Teilnehmer stehen mit leerer Person
+  const courseRows = [];
+  for (const c of st.courses || []) {
+    const m = courseMembers(st, c.id), base = [c.title, c.type, c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length];
+    if (!m.length) courseRows.push([...base, '', '', '']);
+    for (const e of m) { const cf = confById.get(e.id); courseRows.push([...base, ...person(e.pk), { v: cf && cf.hard.length ? cf.hard.map(h => h[0]).join(', ') : '', fill: cf && cf.hard.length ? 'crit' : '' }]); }
+  }
+  add({ name: 'Lehrgänge', columns: [{ header: 'Lehrgang', width: 28 }, { header: 'Art', width: 16 }, { header: 'Zielmuster', width: 11 }, { header: 'Beginn', width: 12, type: 'date' }, { header: 'Ende', width: 12, type: 'date' },
+    { header: 'Lehrgangstage', width: 12, type: 'int' }, { header: 'Plätze', width: 8, type: 'int' }, { header: 'Teilnehmer', width: 11, type: 'int' }, { header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Konflikt', width: 30 }], rows: courseRows });
 
   // Planungsergebnis
   const rep = st.report.slice().sort((a, b) => (REPORT_ORDER[a.status] ?? 9) - (REPORT_ORDER[b.status] ?? 9));

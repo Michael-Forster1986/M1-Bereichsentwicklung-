@@ -33,14 +33,15 @@ alias('area', 'area', 'Bereich');
 alias('shift', 'shift', 'Dienst', 'Schicht');
 alias('start', 'start', 'Beginn', 'von', 'Individueller Start', 'Startdatum');
 alias('end', 'end', 'Ende', 'bis', 'Enddatum');
-alias('target', 'target', 'Zielmuster', 'Ziel');
+alias('target', 'target', 'Zielmuster', 'Ziel', 'Muster');
 alias('level', 'level', 'Zielstufe', 'Stufe');
 alias('priority', 'priority', 'Priorität', 'Prio', 'Planungspriorität');
 alias('confirmed', 'confirmed', 'bestätigt', 'Voraussetzungen bestätigt');
 alias('gate', 'gate', 'Abschluss Doings', 'Abschluss aller Doings');
 alias('date', 'date', 'Datum', 'Tag');
-alias('type', 'type', 'Art', 'Maßnahme', 'Typ');
-alias('title', 'title', 'Titel', 'Lehrgang', 'Bezeichnung');
+alias('type', 'type', 'Art', 'Maßnahme', 'Typ', 'Lehrgangsart');
+alias('title', 'title', 'Titel', 'Lehrgang', 'Bezeichnung', 'Kurs', 'Kursname', 'Lehrgangsname');
+alias('seats', 'seats', 'Plätze', 'Platzzahl', 'Teilnehmerzahl', 'max. Teilnehmer', 'Kapazität Lehrgang');
 alias('net', 'net', 'NettoVorFortbildung', 'Netto');
 alias('min', 'min', 'Minimum');
 alias('zero', 'zero', '0Punkt', '0-Punkt', 'Nullpunkt');
@@ -72,5 +73,6 @@ export const TEMPLATES = {
   roster: ['pk', 'date', 'area', 'shift'], absences: ['pk', 'start', 'end', 'type'],
   capacity: ['date', 'area', 'shift', 'net', 'min', 'zero', 'checked', 'absencesIncluded', 'gross', 'absent'],
   school: ['name', 'start', 'end'], events: ['pk', 'type', 'title', 'start', 'end', 'trainee', 'mentor', 'tec', 'examiner'],
-  key: ['alias', 'pk', 'name', 'org']
+  key: ['alias', 'pk', 'name', 'org'],
+  courses: ['title', 'type', 'target', 'start', 'end', 'seats', 'pk']
 };
