@@ -370,7 +370,7 @@ test('Fehleraufzeichnung: Programmfehler landen ohne Projektdaten im Protokoll',
   errors.length = 0;
 });
 
-test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreicht nur sein Ziel', async () => {
+test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreicht nur sein Ziel', async t => {
   const state = () => page.evaluate(() => window.m1desktop.update.state());
   // der Kanal der Aktualisierung weist jede fremde Adresse ab
   const foreign = () => app.evaluate(({ session, net }) => new Promise(resolve => {
@@ -380,9 +380,11 @@ test('Aktualisierung: neue Version wird gefunden und gemeldet; der Kanal erreich
   if (PACKAGED) {
     // fertiges Programm: die Aktualisierung ist eingebaut und fragt die Veröffentlichungen des Projekts
     assert.equal((await state()).mode, 'install', 'das gepackte Programm kann sich selbst aktualisieren');
-    const st = await page.evaluate(() => window.m1desktop.update.check());
-    assert.ok(['current', 'available', 'error'].includes(st.phase), 'Suche endet mit einem Ergebnis: ' + st.phase);
-    assert.doesNotMatch(st.error, /app-update|ENOENT|Cannot find module/i, 'Aktualisierung ist vollständig eingebaut');
+    // die Suche läuft gegen die echten Veröffentlichungen: sie muss sie erreichen und zu einem Ergebnis kommen
+    let st = null;
+    for (let i = 0; i < 3 && (!st || st.phase === 'error'); i++) { if (st) await new Promise(r => setTimeout(r, 4000)); st = await page.evaluate(() => window.m1desktop.update.check()); }
+    t.diagnostic('Suche in den Veröffentlichungen: ' + st.phase + (st.version ? ' ' + st.version : '') + (st.error ? ' – ' + st.error : ''));
+    assert.ok(['current', 'available'].includes(st.phase), 'Suche endet mit einem Ergebnis, nicht mit: ' + st.phase + ' ' + st.error);
     assert.match(await foreign(), /^blockiert/);
     return;
   }

@@ -101,3 +101,44 @@ jobs:
             --title "M1 Qualifikationscockpit $v" \
             --notes "Installierte Programme aktualisieren sich selbst. Für die erste Installation: M1-Qualifikationscockpit-$v-Setup.exe laden und ausführen. Die portable Fassung aktualisiert sich nicht selbst." \
             "release/M1-Qualifikationscockpit-$v-Setup.exe" "release/M1-Qualifikationscockpit-$v-Setup.exe.blockmap" release/latest.yml "release/M1-Qualifikationscockpit-$v-portable.exe"
+
+  # Der Ernstfall: Ein installiertes Programm mit älterer Versionsnummer muss die veröffentlichte Version finden,
+  # laden, beim Beenden installieren und danach in ihr laufen. Auf main läuft das nach der Veröffentlichung –
+  # geprüft wird also genau die Version, die installierte Programme gleich erhalten.
+  aktualisierung:
+    name: Aktualisierung von Ende zu Ende (Windows)
+    needs: windows
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Ältere Version bauen (0.0.1) und installieren
+        shell: pwsh
+        run: |
+          npm pkg set version=0.0.1
+          npm run build
+          npx electron-builder --win nsis --x64 --publish never
+          $setup = Get-ChildItem release -Filter '*-Setup.exe' | Select-Object -First 1
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S' -Wait
+          $exe = $null
+          for ($i = 0; $i -lt 60 -and -not $exe; $i++) {
+            $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'M1 Qualifikationscockpit.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $exe) { Start-Sleep -Seconds 2 }
+          }
+          if (-not $exe) { throw 'Das installierte Programm wurde nicht gefunden.' }
+          "M1_INSTALLED=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Installiert: $($exe.FullName) · Version $($exe.VersionInfo.ProductVersion)"
+      - name: Aktualisieren lassen und Ergebnis prüfen
+        run: node --test e2e/update.test.mjs
+      - name: Fehlerprotokoll des Programms zeigen (falls vorhanden)
+        if: always()
+        shell: pwsh
+        run: |
+          Get-ChildItem $env:TEMP -Recurse -Filter 'Fehlerprotokoll.txt' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "--- $($_.FullName)"; Get-Content $_.FullName }
+          exit 0
