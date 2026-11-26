@@ -328,3 +328,36 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--line-2);backgroun
 }
 .g-open{position:sticky;left:calc(var(--lw) + 10px);display:inline-block;line-height:var(--rh);font-size:11.5px;color:var(--muted);white-space:nowrap}
 
+
+/* ==========================================================================
+   Ergänzungen des Desktop-Programms (nicht Teil der ursprünglichen Einzeldatei)
+   ========================================================================== */
+/* ---------- Gesamtbericht ---------- */
+.doc{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:26px 30px;max-width:1240px;box-shadow:var(--shadow-1)}
+.doc-head{display:flex;gap:16px;align-items:flex-start;border-bottom:2px solid var(--accent);padding-bottom:14px}
+.doc-head h1{font-size:23px;font-weight:650;letter-spacing:-.015em;margin:2px 0 4px}
+.doc-head p{font-size:13px}
+.doc-kicker{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.doc-flag{margin-left:auto;border:1.5px solid var(--crit-ink);color:var(--crit-ink);font-weight:650;font-size:12px;padding:4px 10px;border-radius:6px;white-space:nowrap}
+.doc section{margin-top:24px}
+.doc h2{font-size:15.5px;font-weight:650;margin-bottom:10px}
+.doc .tbl{border:1px solid var(--line);border-radius:8px;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.doc .tbl th{position:static}
+.doc .tbl td{vertical-align:top}
+.doc .tbl td:first-child{white-space:normal}
+.doc .tbl tr.total td{font-weight:650;background:var(--surface-2);border-top:1px solid var(--line-2)}
+.doc .ampel .cells i:hover{outline:0}
+.doc .kpi .l,.doc .kpi .s{white-space:normal;overflow:visible}
+.doc-list{margin:0 0 8px 18px;padding:0;font-size:13px;color:var(--ink-2)}
+.doc-list li{margin:3px 0}
+@media print{
+  .doc{border:0;border-radius:0;padding:0;max-width:none;box-shadow:none}
+  .doc section.pb{break-before:page;margin-top:0}
+  .doc section:not(.pb){break-inside:avoid}
+  .doc h2{break-after:avoid}
+  .doc .tbl{font-size:10.5px;border-radius:0}
+  .doc .tbl thead{display:table-header-group}
+  .doc .tbl tr{break-inside:avoid}
+  .doc .tbl th,.doc .tbl td{padding:4px 7px}
+  .doc .kpi .v{font-size:21px}
+}

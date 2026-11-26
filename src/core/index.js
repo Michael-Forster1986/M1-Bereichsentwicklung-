@@ -21,3 +21,5 @@ export { PROJECT_VERSION, wrapProject, projectYears, isProjectPayload, sanitizeP
 export { pseudonymize, reidentify } from './pseudonym.js';
 export { demoState } from './demo.js';
 export { readXlsx, xlsxPeopleTable } from './xlsx-read.js';
+export { writeXlsx, zip, excelDate, sheetNames } from './xlsx-write.js';
+export { REPORT_LABELS, ROUTE_LABELS, DATA_CLASS_LABELS, MONTHS, NOTICE, originOf, monthlyFigures, clusterFigures, yearFigures, capStatus, buildWorkbook } from './report.js';

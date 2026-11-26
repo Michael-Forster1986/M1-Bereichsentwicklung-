@@ -153,6 +153,20 @@ test('Ausgaben: CSV, Programm mit Stand (HTML) und PDF', async () => {
   assert.equal(fs.readFileSync(pdf).subarray(0, 5).toString(), '%PDF-');
 });
 
+test('Ausgaben: Gesamtbericht als PDF und Excel-Arbeitsmappe', async () => {
+  const pdf = path.join(TMP, 'Gesamtbericht.pdf'), xlsx = path.join(TMP, 'Auswertung.xlsx');
+  await nextSave(pdf); await menu('act', 'export-pdf-report');
+  await waitFor(() => fs.existsSync(pdf) && fs.statSync(pdf).size > 20000, 'Gesamtbericht', 30000);
+  assert.equal(fs.readFileSync(pdf).subarray(0, 5).toString(), '%PDF-');
+  assert.match(await page.textContent('#main h1'), /^Gesamtbericht/);
+  assert.match(await page.textContent('#main .doc'), /Planungsergebnis je Person/);
+  await nextSave(xlsx); await page.click('#main [data-act="export-xlsx"]');
+  await waitFor(() => fs.existsSync(xlsx) && fs.statSync(xlsx).size > 20000, 'Excel-Arbeitsmappe');
+  const bytes = fs.readFileSync(xlsx);
+  assert.equal(bytes.subarray(0, 2).toString(), 'PK');
+  assert.ok(bytes.includes(Buffer.from('xl/worksheets/sheet9.xml')), 'neun Tabellenblätter');
+});
+
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });
 
 test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', async () => {

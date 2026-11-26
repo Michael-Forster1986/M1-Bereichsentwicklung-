@@ -65,7 +65,7 @@ export function renderTop() {
 function renderRail() {
   const cnt = { report: CONF.size ? [CONF.size, 'crit'] : null, people: [S.people.length, ''], events: [S.events.length, ''] };
   setHTML($('#rail'), NAV.map(([group, items]) => html`<h4>${group}</h4>${items.map(([id, label]) => html`
-    <button data-act="go" data-id="${id}" ${UI.view === id ? raw('aria-current="page"') : ''}>${label}${cnt[id] ? html`<span class="cnt ${cnt[id][1]}">${nf(cnt[id][0])}</span>` : ''}</button>`)}`));
+    <button data-act="go" data-id="${id}" ${UI.view === id || (id === 'report' && UI.view === 'fullreport') ? raw('aria-current="page"') : ''}>${label}${cnt[id] ? html`<span class="cnt ${cnt[id][1]}">${nf(cnt[id][0])}</span>` : ''}</button>`)}`));
 }
 ACT.go = t => go(t.dataset.id);
 ACT.undo = undo;
