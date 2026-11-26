@@ -78,7 +78,7 @@ ACT['ros-week'] = () => {
   if (!names.length) return toast('Bitte mindestens eine Woche der Folge wählen', 'crit');
   let n = 0;
   commit('', () => { n = Core.fillRosterWeekly(S, IX.cal, p.pk, { ...per, seq }); });
-  say(p, n, 'mit der Wochenfolge ' + names.join(' → ') + ' eingetragen (' + per.label + ')');
+  toast(n ? pName(p) + ': Wochenfolge ' + names.join(' → ') + ' eingetragen (' + per.label + ') – alle übrigen Tage des Zeitraums sind frei' : 'Nichts zu ändern – die Wochenfolge ist bereits so eingetragen');
 };
 ACT['ros-copy-from'] = () => {
   const p = person(), from = S.people.find(x => x.alias === tools().from); if (!p) return;
