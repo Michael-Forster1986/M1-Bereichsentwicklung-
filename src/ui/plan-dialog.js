@@ -10,7 +10,7 @@ import { go } from './shell.js';
 // ---------- Neuberechnung mit Vorher/Nachher-Vergleich -----------------------
 function planMetrics(st, ix, sum) {
   return { complete: sum.route.complete, partial: sum.route.partial, none: sum.route.none, underMin: sum.underMin, underZero: sum.underZero,
-    days: sum.trainingDays, conflicts: Core.findConflicts(st, ix).length, events: st.events.length };
+    days: sum.trainingDays, conflicts: Core.findConflicts(st, ix).filter(c => c.hard.length).length, events: st.events.length };
 }
 ACT.plan = () => {
   const hasScenario = S.events.some(e => e.synthetic && !e.auto), fixed = S.events.filter(e => !e.auto && !e.synthetic).length, st = S.settings;

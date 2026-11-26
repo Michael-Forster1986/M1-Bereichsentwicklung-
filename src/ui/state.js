@@ -7,6 +7,8 @@ import { render } from './shell.js';
 // PRJ ist das Projekt (ein oder mehrere Planungsjahre), S der Stand des aktiven Jahres.
 // Alle Ansichten und Rechenwege arbeiten auf S; IX, SUM, CONF, PROG sind daraus abgeleitet.
 export let PRJ = null, S = null, IX = null, SUM = null, CONF = new Map(), PROG = new Map(), ALIAS = new Map(), dirty = false;
+/** Termine mit echtem Konflikt. Reine Hinweise (z. B. Dienstplananpassung im Lehrgang) stehen in CONF, zählen hier aber nicht. */
+export let HARD = 0;
 export const hist = [], future = [];
 /** Geöffnete Datei (nur Desktop-Programm): Schlüssel beim Hauptprozess, Anzeigename, Kennung des gesicherten Stands. */
 export const DOC = { token: '', name: '', path: '', clean: '' };
@@ -36,6 +38,7 @@ export function recompute() {
   IX = Core.buildIndex(S);
   SUM = Core.summarize(S, IX);
   CONF = new Map(Core.findConflicts(S, IX).map(c => [c.id, c]));
+  HARD = 0; for (const c of CONF.values()) if (c.hard.length) HARD++;
   PROG = new Map(S.people.map(p => [p.pk, Core.routeProgress(S, IX, p)]));
   ALIAS = new Map(S.people.map(p => [p.alias, p]));
 }

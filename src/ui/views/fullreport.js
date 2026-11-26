@@ -16,7 +16,7 @@ const zero = v => v ? nf(v) : html`<span class="muted">–</span>`;
 VIEWS.fullreport = {
   render() {
     const st = S.settings, r = SUM.route, hours = st.hours, today = new Date().toISOString().slice(0, 10), pi = S.planInfo;
-    const conf = [...CONF.values()], rep = S.report.slice().sort((a, b) => ORDER[a.status] - ORDER[b.status] || collator.compare(nameOf(a.pk), nameOf(b.pk)));
+    const conf = [...CONF.values()].filter(c => c.hard.length), rep = S.report.slice().sort((a, b) => ORDER[a.status] - ORDER[b.status] || collator.compare(nameOf(a.pk), nameOf(b.pk)));
     const evs = S.events.slice().sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : collator.compare(nameOf(a.pk), nameOf(b.pk)));
     const months = Core.monthlyFigures(S, IX, SUM), clusters = Core.clusterFigures(S, IX).filter(c => c.people > 0);
     const a = areaKnown(0) ? 0 : [1, 2].find(areaKnown) ?? 0, ks = [0, 1, 2].map(s => a * 3 + s), wz = SUM.worstZero, wm = SUM.worstMin;

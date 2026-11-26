@@ -1,7 +1,7 @@
 import * as Core from '../../core/index.js';
 import { html, raw } from '../dom.js';
 import { MONL, clusterLabel, dayLabel, nf, opts, sgn } from '../format.js';
-import { CONF, IX, S, SUM, UI } from '../state.js';
+import { HARD, IX, S, SUM, UI } from '../state.js';
 import { ACT, CHG, INP, VIEWS } from '../registry.js';
 import { yearCompareCard } from './years.js';
 import { go, render } from '../shell.js';
@@ -13,7 +13,7 @@ function buildHints() {
   if (!S.people.length) { add('crit', 'Noch keine Personen geladen.', ['Stammdaten importieren', 'go', 'data']); return h; }
   if (S.meta.dataClass === 'demo') add('info', 'Demo-Daten aktiv: alle Personen, Dienste und Abwesenheiten sind frei erfunden.', ['Eigene Daten laden', 'go', 'data']);
   const pl = (n, one, many) => nf(n) + ' ' + (n === 1 ? one : many);
-  if (CONF.size) add('crit', pl(CONF.size, 'Termin mit Konflikt', 'Termine mit Konflikten') + ' (Abwesenheit, Dienst, Kollision oder Kapazität).', ['Zum Bericht', 'go', 'report']);
+  if (HARD) add('crit', pl(HARD, 'Termin mit Konflikt', 'Termine mit Konflikten') + ' (Abwesenheit, Dienst, Kollision oder Kapazität).', ['Zum Bericht', 'go', 'report']);
   if (SUM.underMin) add('crit', pl(SUM.underMin, 'Diensttag liegt', 'Diensttage liegen') + ' unter dem Minimum.', ['Kapazität ansehen', 'go', 'capacity']);
   if (SUM.underZero) add('warn', pl(SUM.underZero, 'Diensttag liegt', 'Diensttage liegen') + ' unter dem 0-Punkt.', ['Kapazität ansehen', 'go', 'capacity']);
   if (SUM.route.partial) add('warn', pl(SUM.route.partial, 'Ausbildungsweg lässt', 'Ausbildungswege lassen') + ' sich ' + S.meta.year + ' nur teilweise einplanen.', ['Zum Bericht', 'go', 'report']);
@@ -69,7 +69,7 @@ VIEWS.overview = {
       <button class="kpi" data-act="go" data-id="events"><div class="l">Termine</div><div class="v">${nf(SUM.events)}</div><div class="s">${nf(SUM.auto)} berechnet · ${nf(SUM.fixed + SUM.scenario)} fixiert</div></button>
       <button class="kpi ${SUM.underMin ? 'crit' : ''}" data-act="go" data-id="capacity"><div class="l">Diensttage unter Minimum</div><div class="v">${nf(SUM.underMin)}</div><div class="s">von ${nf(SUM.knownDays)} geprüften</div></button>
       <button class="kpi ${SUM.underZero ? 'warn' : ''}" data-act="go" data-id="capacity"><div class="l">Diensttage unter 0-Punkt</div><div class="v">${nf(SUM.underZero)}</div><div class="s">${wz ? 'kleinste Reserve ' + sgn(wz.v) : 'keine Tagesdaten'}</div></button>
-      <button class="kpi ${CONF.size ? 'crit' : ''}" data-act="go" data-id="report"><div class="l">Termine mit Konflikt</div><div class="v">${nf(CONF.size)}</div><div class="s">${nf(SUM.trainingDays)} Ausbildungstage geplant</div></button>
+      <button class="kpi ${HARD ? 'crit' : ''}" data-act="go" data-id="report"><div class="l">Termine mit Konflikt</div><div class="v">${nf(HARD)}</div><div class="s">${nf(SUM.trainingDays)} Ausbildungstage geplant</div></button>
     </div>
     ${yearCompareCard()}
     <div class="gridA" style="margin-bottom:14px">
