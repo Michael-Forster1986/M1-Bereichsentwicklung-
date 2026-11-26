@@ -1,9 +1,10 @@
 import { ABS_TYPES, CLUSTERS, EPS, PATTERNS, PREP } from './constants.js';
 import { kArea, kShift, num } from './util.js';
-import { isoWeek } from './dates.js';
+import { fmtShort, isoWeek } from './dates.js';
 import { buildIndex, capInfo } from './indexing.js';
 import { findConflicts } from './conflicts.js';
 import { courseDayList, courseMembers } from './courses.js';
+import { hasModules, isPartial, memberModules, moduleName, moduleText } from './modules.js';
 import { routeProgress, summarize } from './summary.js';
 import { labelOf } from './measures.js';
 
@@ -140,11 +141,14 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
   const courseRows = [];
   for (const c of st.courses || []) {
     const m = courseMembers(st, c.id), base = [c.title, labelOf(st, c.type), c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length];
-    if (!m.length) courseRows.push([...base, '', '', '']);
-    for (const e of m) { const cf = confById.get(e.id); courseRows.push([...base, ...person(e.pk), { v: cf && cf.hard.length ? cf.hard.map(h => h[0]).join(', ') : '', fill: cf && cf.hard.length ? 'crit' : '' }]); }
+    // Lehrgang mit Modulen: welche Module wann stattfinden – und je Teilnehmer, welche er belegt
+    const mods = hasModules(c) ? c.modules.map(x => moduleName(x.no) + (x.na ? ' N/A' : ' ' + fmtShort(x.start) + (x.end !== x.start ? '–' + fmtShort(x.end) : ''))).join('; ') : '';
+    if (!m.length) courseRows.push([...base, '', '', '', mods, '']);
+    for (const e of m) { const cf = confById.get(e.id), p = ix.people.get(e.pk); courseRows.push([...base, ...person(e.pk), { v: cf && cf.hard.length ? cf.hard.map(h => h[0]).join(', ') : '', fill: cf && cf.hard.length ? 'crit' : '' },
+      mods, mods ? (isPartial(c, p) ? 'Teilbeleger: ' + moduleText(memberModules(c, p)) : 'alle Module') : '']); }
   }
   add({ name: 'Lehrgänge', columns: [{ header: 'Lehrgang', width: 28 }, { header: 'Art', width: 16 }, { header: 'Zielmuster', width: 11 }, { header: 'Beginn', width: 12, type: 'date' }, { header: 'Ende', width: 12, type: 'date' },
-    { header: 'Lehrgangstage', width: 12, type: 'int' }, { header: 'Plätze', width: 8, type: 'int' }, { header: 'Teilnehmer', width: 11, type: 'int' }, { header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Konflikt', width: 30 }], rows: courseRows });
+    { header: 'Lehrgangstage', width: 12, type: 'int' }, { header: 'Plätze', width: 8, type: 'int' }, { header: 'Teilnehmer', width: 11, type: 'int' }, { header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Konflikt', width: 30 }, { header: 'Module des Lehrgangs', width: 44 }, { header: 'Belegte Module', width: 26 }], rows: courseRows });
 
   // Planungsergebnis
   const rep = st.report.slice().sort((a, b) => (REPORT_ORDER[a.status] ?? 9) - (REPORT_ORDER[b.status] ?? 9));

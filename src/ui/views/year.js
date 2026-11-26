@@ -72,6 +72,9 @@ function drawGantt() {
   if (dw >= 3.4) for (let d = 0; d < n; d++) { if (cal.dow[d] === 6) under += '<i class="w" style="left:' + px(d) + 'px;width:' + px(Math.min(2, n - d)) + 'px"></i>'; if (IX.holiday[d]) under += '<i class="h" style="left:' + px(d) + 'px;width:' + px(1) + 'px"></i>'; }
   for (const s of S.school) { const a = Math.max(0, cal.idx(s.start)), b = Math.min(n - 1, cal.idx(s.end)); if (b >= a) under += '<i class="sc" style="left:' + px(a) + 'px;width:' + px(b - a + 1) + 'px"></i>'; }
   for (let m = 1; m < 12; m++) under += '<i class="m" style="left:' + px(cal.monthStart[m]) + 'px"></i>';
+  // Lehrgänge mit Modulen: der Balken einer Person zerfällt in ihre Module
+  const modCourse = new Map(S.courses.filter(c => Core.hasModules(c)).map(c => [c.id, c]));
+  const runsOf = list => { const runs = []; let a = list[0], b = list[0]; for (let i = 1; i < list.length; i++) { if (workCum[list[i]] - workCum[b + 1] > 0) { runs.push([a, b]); a = list[i]; } b = list[i]; } runs.push([a, b]); return runs; };
   // Zeilen
   const rowHtml = p => {
     const evs = IX.evByPerson.get(p.pk) || [], pr = PROG.get(p.pk);
@@ -80,15 +83,15 @@ function drawGantt() {
     for (const e of evs) {
       if (UI.gHide.has(e.type)) continue;
       const ds = IX.evDays.get(e.id); if (!ds || !ds.length) continue;
-      const runs = []; let a = ds[0], b = ds[0];
-      for (let i = 1; i < ds.length; i++) { if (workCum[ds[i]] - workCum[b + 1] > 0) { runs.push([a, b]); a = ds[i]; } b = ds[i]; }
-      runs.push([a, b]);
       const cf = CONF.get(e.id), cls = tcls(e.type) + (e.auto ? '' : e.synthetic ? ' sc' : ' fx') + (cf && cf.hard.length ? ' cf' : '');
+      const title = e.title && e.courseKind ? e.title : TSHORT[e.type] || e.type;
+      const mc = e.courseId ? modCourse.get(e.courseId) : null, parts = mc ? Core.eventModules(IX, mc, e) : [];
+      // je Abschnitt: [erster Tag, letzter Tag, Beschriftung] – bei Modulen ein Abschnitt je Modul, sonst je zusammenhängendem Lauf
+      const runs = parts.length ? parts.flatMap(m => runsOf(m.days).map(r => [r[0], r[1], Core.moduleName(m.no)])) : runsOf(ds).map(r => [r[0], r[1], title]);
       if (runs.length > 1) t += '<i class="link ' + tcls(e.type) + '" style="left:' + px(ds[0]) + 'px;width:' + px(ds[ds.length - 1] - ds[0] + 1) + 'px"></i>';
-      const label = e.title && e.courseKind ? e.title : TSHORT[e.type] || e.type;
-      runs.forEach(([x, y], ri) => {
+      runs.forEach(([x, y, label], ri) => {
         const w = Math.max(2, px(y - x + 1) - (dw >= 3 ? 1 : 0)), last = ri === runs.length - 1;
-        t += '<button class="bar ' + cls + (e.partial && last ? ' pt' : '') + '" style="left:' + px(x) + 'px;width:' + w + 'px" data-act="event-open" data-id="' + esc(e.id) + '" data-drag="event" data-tk="event" aria-label="' + esc(tname(e.type) + ' ' + fmt(e.start) + ' bis ' + fmt(e.end)) + '">' + (w >= label.length * 6.3 + 10 ? '<span>' + esc(label) + '</span>' : '') + '</button>';
+        t += '<button class="bar ' + cls + (parts.length ? ' md' : '') + (e.partial && last ? ' pt' : '') + '" style="left:' + px(x) + 'px;width:' + w + 'px" data-act="event-open" data-id="' + esc(e.id) + '" data-drag="event" data-tk="event" aria-label="' + esc(tname(e.type) + (parts.length ? ' ' + label : '') + ' ' + fmt(cal.iso[x]) + ' bis ' + fmt(cal.iso[y])) + '">' + (w >= label.length * 6.3 + 10 ? '<span>' + esc(label) + '</span>' : '') + '</button>';
       });
     }
     if (!evs.length) t += '<small class="g-open">' + esc(pr.state === 'locked' ? 'ausgeschlossen – keine neuen Maßnahmen' : pr.state === 'unassigned' ? 'Cluster offen' : (S.report.find(r => r.pk === p.pk)?.reason || 'Planung offen')) + '</small>';
@@ -106,8 +109,9 @@ function drawGantt() {
 TIP.event = t => {
   const e = IX.evById.get(t.dataset.id); if (!e) return null;
   const ds = IX.evDays.get(e.id) || [], cf = CONF.get(e.id), span = ds.length ? IX.cal.idx(e.end) - IX.cal.idx(e.start) + 1 : 0;
+  const mc = e.courseId ? S.courses.find(c => c.id === e.courseId && Core.hasModules(c)) : null, mods = mc ? Core.eventModules(IX, mc, e).map(m => m.no) : [];
   return html`<b>${e.title ? e.title + ' · ' : ''}${tname(e.type)}</b> <span class="k">${originOf(e)}${e.partial ? ' · Teilweg' : ''}</span><br>${nameOf(e.pk)}<br>
-    ${fmt(e.start)} – ${fmt(e.end)}<br><span class="k">${ds.length} Ausbildungstage${span > ds.length ? ' verteilt über ' + span + ' Kalendertage' : ''}</span>
+    ${fmt(e.start)} – ${fmt(e.end)}<br><span class="k">${ds.length} Ausbildungstage${span > ds.length ? ' verteilt über ' + span + ' Kalendertage' : ''}</span>${mods.length ? html`<br><b>Module:</b> ${Core.moduleText(mods)}${Core.isPartial(mc, IX.people.get(e.pk)) ? html` <span class="k">· Teilbeleger</span>` : ''}` : ''}
 <br><span class="k">Verlust je Tag: Teilnehmer ${nf(e.trainee, 1)} · Mentor ${nf(e.mentor, 1)} · TEC ${nf(e.tec, 1)} · Prüfer ${nf(e.examiner, 1)}</span><br>
     ${cf && cf.hard.length ? html`<b>Konflikt:</b> ${cf.hard.map(([r, c]) => r + (c > 1 ? ' (' + c + ' Tage)' : '')).join(', ')}` : ''}${cf && cf.soft.length ? html`<br><span class="k">${cf.soft.map(([r, c]) => r + ' (' + c + ' Tage)').join(', ')}</span>` : ''}`;
 };

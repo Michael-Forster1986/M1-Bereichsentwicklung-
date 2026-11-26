@@ -34,10 +34,12 @@ const personOf = row => P(row.querySelector('.g-lab').dataset.pk);
 /** Prüfung für die aktuelle Zielstelle. */
 function evaluate(spec, p, day) {
   if (spec.kind === 'seat') {
-    const c = spec.course, ds = Core.courseDayList(IX, c), f = Core.elementFor(S, IX, p, c.type);
-    const r = Core.checkPlacement(S, IX, { pk: p.pk, type: c.type, start: ds[0] ?? 0, len: ds.length, factors: f });
+    // bei Modulen belegt die Person nur die Tage der Module, die sie braucht
+    const c = spec.course, ds = Core.memberDayList(IX, c, p), f = Core.elementFor(S, IX, p, c.type);
+    const r = Core.checkPlacement(S, IX, { pk: p.pk, type: c.type, start: ds[0] ?? 0, len: ds.length, factors: f, ...(Core.hasModules(c) ? { days: ds } : {}) });
     const a = Core.assessCourse(S, IX, c, [p.pk], { group: 'all' }), extra = a.issues.filter(i => i.cat === 'Platzzahl' || i.cat === 'Reihenfolge im Ausbildungsweg' || i.cat === 'Lehrgang').map(i => i.cat === 'Lehrgang' ? 'alle Plätze belegt' : i.cat);
     if (Core.courseMembers(S, c.id).some(e => e.pk === p.pk)) extra.push('nimmt bereits teil');
+    if (!ds.length && Core.hasModules(c)) extra.push('keines der benötigten Module findet statt');
     return { ...r, ok: r.ok && !extra.length, extra, factors: f };
   }
   if (spec.kind === 'event') {

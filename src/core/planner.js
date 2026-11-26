@@ -4,7 +4,8 @@ import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
-import { courseAudience } from './courses.js';
+import { courseAudience, courseDayList, memberDayList } from './courses.js';
+import { hasModules } from './modules.js';
 import { FRAME_TYPE, rulesOf } from './rules.js';
 
 // ---------- Planer -----------------------------------------------------
@@ -35,7 +36,7 @@ export function runPlan(st, ix, opt = {}) {
   // Lehrgänge als Block: Kurs-Schritte werden nicht tageweise verteilt, sondern über einen Platz in einem Lehrgangstermin belegt
   const blocks = S.courseBlocks === true && Array.isArray(st.courses), courseDays = new Map(), seatUse = new Map();
   if (blocks) {
-    for (const x of st.courses) { const ds = []; for (let d = Math.max(0, cal.idx(x.start)), b = Math.min(n - 1, cal.idx(x.end)); d <= b; d++) if (ix.work[d]) ds.push(d); courseDays.set(x.id, ds); }
+    for (const x of st.courses) courseDays.set(x.id, courseDayList(ix, x));
     for (const e of keep) if (e.courseId) seatUse.set(e.courseId, (seatUse.get(e.courseId) || 0) + 1);
   }
   const lab = t => labelOf(st, t);                       // Bezeichnung für Meldungen
@@ -119,9 +120,11 @@ export function runPlan(st, ix, opt = {}) {
         if (course && fs.some(e => e.courseId || e.courseKind)) continue;      // Teilnahme an einem Lehrgang erfüllt den Schritt
         if (count >= c.days) continue;
         if (course) {
+          const daysFor = x => hasModules(x) ? memberDayList(ix, x, p) : courseDays.get(x.id) || [];   // Teilbeleger belegen nur ihre Module
           const sum = c.trainee + c.mentor + c.tec + c.examiner, aud = courseAudience(st, p, t), offers = st.courses.filter(x => x.type === t && (x.target || '') === aud), why = new Map();
           const obstacle = x => {
-            const ds = courseDays.get(x.id) || [];
+            const ds = daysFor(x);
+            if (!ds.length && hasModules(x)) return 'keines der benötigten Module findet statt';
             if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
             if (x.seats != null && (seatUse.get(x.id) || 0) >= x.seats) return 'ausgebucht';
             for (const d of ds) { if (ix.abs[i][d]) return 'Abwesenheit'; if (o[d]) return 'Terminkollision'; }
@@ -146,7 +149,7 @@ export function runPlan(st, ix, opt = {}) {
             }
             break;
           }
-          const ds = courseDays.get(hit.id);
+          const ds = daysFor(hit);
           for (const d of ds) {
             const k = assign(ix, i, d); o[d] = 1;                                // dienstfreie Lehrgangstage: Dienstplananpassung ohne Produktionsverlust
             if (k >= 0) { L.loss[k][d] += sum; L.mentor[k][d] += c.mentor; L.tec[k][d] += c.tec; L.exam[k][d] += c.examiner; log.push([k, d, sum, c.mentor, c.tec, c.examiner, 1]); }

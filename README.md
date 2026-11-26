@@ -107,6 +107,11 @@ größte Gruppe teilnehmen kann, ohne dass an einem Lehrgangstag die Grenze der 
 „Neu berechnen“ vergibt freie Plätze in der Reihenfolge des Ausbildungswegs. Lehrgänge mit Zielmuster gelten für
 Cluster 5 mit genau diesem Muster, Lehrgänge ohne Zielmuster für den CAT-A-Kursrahmen der übrigen Cluster.
 
+Lehrgänge der Art Basic Knowledge können in Modulen geführt werden (M1 bis M17): Sind Teilbeleger dabei, bekommt jedes
+Modul einen Zeitraum oder die Kennzeichnung N/A (findet nicht statt), und je Person ist festgelegt, welche Module sie
+braucht. Ihr Termin liegt dann nur an diesen Tagen; Planer, Kapazitätsprüfung und Jahresplan rechnen modulgenau
+(`course.modules`, `person.modules`, `src/core/modules.js`). Ohne Teilbeleger genügen Beginn und Ende.
+
 ### Ziehen und Ablegen
 
 Im Jahresplan lassen sich Ausbildungselemente auf eine Person ziehen, Balken verschieben und Personen auf einen
@@ -207,13 +212,13 @@ das Planungsjahr aus dem Datum ableiten.
   Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
   bisherigen Modus (Kurse tageweise, Vorgabe der Dienste, feste Reihenfolge); Lehrgänge als Blöcke, Urlaubsplan-Import,
   die Prüfung beim Ablegen, eigene Schritte, Dienstregeln, freie Reihenfolge, angepasste feste Schritte und die
-  Regeln der Planung haben eigene Tests.
+  Regeln der Planung sowie Module und Teilbeleger (tests/modules.test.js) haben eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
   Wiederherstellung, den Jahreswechsel, den leeren Start und den Übungsmodus, den Urlaubsplan-Import aus Excel,
   Lehrgangsvorschläge, das Ziehen im Jahresplan, Reihenfolge, eigene Schritte und Dienste in den Ausbildungswegen,
   die Dienstplan-Bearbeitung je Person, das Anpassen fester Schritte, die Regeln der Planung, die Übernahme eines
-  geänderten Wegs in den Jahresplan, den Zoom im Jahresplan,
+  geänderten Wegs in den Jahresplan, den Zoom im Jahresplan, Basic Knowledge mit Modulen und Teilbelegern,
   das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
   Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
   Installation einer Aktualisierung unter Windows selbst.

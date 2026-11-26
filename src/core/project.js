@@ -1,3 +1,4 @@
+import { moduleSpan, normModules } from './modules.js';
 import { normRules } from './rules.js';
 import { ABS_TYPES, AREAS, COURSE_TYPES, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS } from './constants.js';
 import { courseTypesOf, isCourse, normMeasureEdits, normMeasures, normShifts, typesOf } from './measures.js';
@@ -28,11 +29,13 @@ function normEvent(e, known, types) {
 /** Prüft einen Lehrgangstermin (Art, Zeitraum, Plätze). types = Maßnahmen, die als Lehrgang stattfinden. */
 export function normCourse(c, types = COURSE_TYPES) {
   if (!c || !types.includes(c.type)) return null;
-  const start = normDate(c.start), end = normDate(c.end);
+  // Lehrgang mit Modulen: der Zeitraum ergibt sich aus den Modulen, die stattfinden
+  const modules = normModules(c.modules, c.type), span = modules ? moduleSpan(modules) : null;
+  const start = span ? span.start : normDate(c.start), end = span ? span.end : normDate(c.end);
   if (!start || !end || end < start) return null;
   const seats = Math.round(num(c.seats));
   return { id: String(c.id || uid()).slice(0, 60), type: c.type, title: String(c.title || c.type).trim().slice(0, 80) || c.type, target: TARGETS.includes(c.target) ? c.target : '',
-    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}) };
+    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}), ...(modules ? { modules } : {}) };
 }
 /**
  * Bringt Lehrgänge und ihre Teilnehmertermine in Einklang: Termine ohne Lehrgang verlieren den Bezug, und

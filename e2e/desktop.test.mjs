@@ -522,6 +522,80 @@ test('Jahresplan: Monatsansicht zeigt die Zeilen, hineinzoomen bis auf einzelne 
   await waitFor(async () => (await page.locator('.g-days').count()) === 0, 'zurück in der Jahresansicht');
 });
 
+test('Lehrgänge: Basic Knowledge mit Modulen, N/A und Teilbelegern – bis in den Jahresplan', async () => {
+  // Basic Knowledge gehört für diesen Test zum Weg von Cluster 1
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+  await page.click('.rt-card >> nth=0');
+  await page.click('.rt-flow[data-keep="rtflow"] ~ .row [data-act="route-add"][data-t="Basic Knowledge"]');
+  await page.waitForSelector('.rt-step[data-step="Basic Knowledge"]');
+  await page.fill('.rt-step[data-step="Basic Knowledge"] input[data-f="days"]', '20'); await page.keyboard.press('Tab');
+  await menu('go', 'courses'); await page.waitForSelector('.dm:has-text("Basic Knowledge") [data-act="crs-new"]');
+  await page.click('.dm:has-text("Basic Knowledge") [data-act="crs-new"]'); await page.waitForSelector('#cnTitle');
+  // die Erweiterung erscheint nur bei Basic Knowledge; die Modul-Tabelle erst mit dem Kästchen „Teilbeleger dabei“
+  assert.equal(await page.isVisible('#cnMods'), true);
+  await page.selectOption('#cnType', 'Theorie'); assert.equal(await page.isVisible('#cnMods'), false);
+  await page.selectOption('#cnType', 'Basic Knowledge'); assert.equal(await page.isVisible('#cnMods'), true);
+  assert.equal(await page.isVisible('#cnModBox'), false, 'ohne Teilbeleger keine Modul-Tabelle');
+  assert.equal(await page.isDisabled('#cnStart'), false);
+  await page.check('#cnPartial');
+  assert.equal(await page.locator('#modEd .mod-r').count(), 17);
+  assert.equal(await page.isDisabled('#cnStart'), true, 'der Zeitraum ergibt sich aus den Modulen');
+  const setMod = async (no, a, b) => { const r = page.locator('#modEd .mod-r[data-no="' + no + '"]'); await r.locator('input[data-f="start"]').fill(a); await r.locator('input[data-f="start"]').dispatchEvent('change'); if (b) { await r.locator('input[data-f="end"]').fill(b); await r.locator('input[data-f="end"]').dispatchEvent('change'); } };
+  await setMod(1, '2027-01-11', '2027-01-15'); await setMod(2, '2027-01-18', '2027-01-22'); await setMod(3, '2027-02-01');          // eintägig: das Ende folgt dem Beginn
+  assert.equal(await page.inputValue('#modEd .mod-r[data-no="3"] input[data-f="end"]'), '2027-02-01');
+  // mit Teilbelegern muss jedes Modul einen Zeitraum haben – oder N/A sein
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /M4: Beginn und Ende eintragen/.test(await toastText()), 'unvollständige Module werden abgelehnt');
+  assert.equal(await page.isVisible('#cnTitle'), true, 'der Dialog bleibt offen');
+  for (let no = 4; no <= 17; no++) await page.check('#modEd .mod-r[data-no="' + no + '"] input[type=checkbox]');
+  assert.match(await page.locator('#modSum').innerText(), /3 Module mit Zeitraum .*14 N\/A$/);
+  assert.equal(await page.isDisabled('#modEd .mod-r[data-no="9"] input[data-f="start"]'), true);
+  await page.click('#modal [data-act="m:ok"]'); await page.waitForSelector('#crsDetail #crsMods');
+  assert.equal(await page.locator('#crsDetail .mchip').count(), 17);
+  assert.equal(await page.locator('#crsDetail .mchip.na').count(), 14);
+  assert.equal(await page.locator('.crs-time .cbar.seg').count(), 3, 'ein Abschnitt je Modul in der Zeitleiste');
+  assert.equal(await page.inputValue('#crsDetail input[data-f="start"]'), '2027-01-11');
+  assert.equal(await page.inputValue('#crsDetail input[data-f="end"]'), '2027-02-01');
+  assert.equal(await page.isDisabled('#crsDetail input[data-f="end"]'), true);
+  // zwei Teilnehmer; der erste wird Teilbeleger und belegt nur M2
+  await page.click('#crsDetail [data-act="crs-join"] >> nth=0');
+  await waitFor(async () => (await page.locator('#crsDetail [data-act="crs-member-mods"]').count()) === 1, 'erster Teilnehmer');
+  await page.click('#crsDetail [data-act="crs-join"] >> nth=0');
+  await waitFor(async () => (await page.locator('#crsDetail [data-act="crs-member-mods"]').count()) === 2, 'zweiter Teilnehmer');
+  await page.click('#crsDetail [data-act="crs-member-mods"] >> nth=0'); await page.waitForSelector('#mmList');
+  assert.equal(await page.locator('#mmList input:not(:disabled)').count(), 3);
+  assert.equal(await page.locator('#mmList input:disabled').count(), 14);
+  await page.click('#modal [data-act="m:none"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /Mindestens ein Modul wählen/.test(await toastText()), 'ohne Modul kein Teilbeleger');
+  await page.check('#mmList input[value="2"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /Teilbeleger: M2/.test(await page.locator('#crsDetail').innerText()), 'Teilbeleger im Lehrgang');
+  assert.match(await page.locator('#crsDetail').innerText(), /alle Module/);
+  // Projektdatei: Module am Lehrgang, benötigte Module an der Person, Termine genau an den Modultagen
+  const file = path.join(TMP, 'Module.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit Modulen');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active], c = st.courses.find(x => x.type === 'Basic Knowledge');
+  assert.deepEqual([c.start, c.end, c.modules.length], ['2027-01-11', '2027-02-01', 17]);
+  assert.deepEqual(c.modules.filter(m => !m.na), [{ no: 1, start: '2027-01-11', end: '2027-01-15' }, { no: 2, start: '2027-01-18', end: '2027-01-22' }, { no: 3, start: '2027-02-01', end: '2027-02-01' }]);
+  const evs = st.events.filter(e => e.courseId === c.id), part = st.people.find(p => Array.isArray(p.modules));
+  assert.equal(evs.length, 2);
+  assert.ok(part && part.modules.includes(2) && !part.modules.includes(1) && !part.modules.includes(3), 'die Person braucht M2, nicht M1 und M3');
+  assert.deepEqual(evs.find(e => e.pk === part.pk).dates, ['2027-01-18', '2027-01-19', '2027-01-20', '2027-01-21', '2027-01-22']);
+  assert.equal(evs.find(e => e.pk !== part.pk).dates.length, 11);
+  // Jahresplan: der Balken zerfällt in die Module – drei beim Vollbeleger, eines beim Teilbeleger
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  await waitFor(async () => (await page.locator('#gantt .bar.md').count()) === 4, 'Modulabschnitte im Jahresplan');
+  assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M2"]').count(), 2);
+  assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M1"]').count(), 1);
+  // ohne Teilbeleger: die Module entfallen, alle belegen wieder den ganzen Zeitraum
+  await menu('go', 'courses'); await page.waitForSelector('#crsDetail #crsMods');
+  await page.click('#crsDetail [data-chg="crs-partial"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('#crsDetail .mchip').count()) === 0, 'Module verworfen');
+  assert.equal(await page.isDisabled('#crsDetail input[data-f="end"]'), false);
+  assert.equal(await page.locator('.crs-time .cbar.seg').count(), 0);
+  await page.click('#crsDetail [data-act="crs-delete"]'); await page.click('#modal [data-act="m:ok"]');
+});
+
 test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge und Ziehen', async () => {
   await menu('go', 'year'); await page.waitForSelector('.g-row');
   await page.click('.g-row >> nth=0 >> .g-lab'); await page.waitForSelector('#pcal');

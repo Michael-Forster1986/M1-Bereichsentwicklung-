@@ -1,3 +1,4 @@
+import { normPersonModules } from './modules.js';
 import { rulesOf } from './rules.js';
 import { AREAS, CLUSTERS, LEVELS, PATTERNS, SHIFTS, TARGETS, TYPES } from './constants.js';
 import { clamp, fin, num, truthy } from './util.js';
@@ -41,6 +42,8 @@ export function normPerson(p, types = TYPES) {
     out.customRoute = { steps: [...new Set(p.customRoute.steps.filter(t => types.includes(t)))], config: cfg };   // die Reihenfolge legt der Mensch fest
   }
   if (p.targetAssumed) out.targetAssumed = true;
+  const modules = normPersonModules(p.modules);                 // nur bestimmte Module (Teilbeleger); ohne Angabe: alle
+  if (modules) out.modules = modules;
   const credit = normCredit(p.credit, types);
   if (credit) out.credit = credit;
   return out;
