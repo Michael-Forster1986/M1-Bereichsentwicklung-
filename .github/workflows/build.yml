@@ -71,10 +71,14 @@ jobs:
           name: M1-Qualifikationscockpit-Windows
           path: release/*.exe
           if-no-files-found: error
-      - name: Dateien für die automatische Aktualisierung prüfen
+      - name: Dateien für die automatische Aktualisierung prüfen; Setup als ZIP packen
         shell: bash
         run: |
           v=$(node -p "require('./package.json').version")
+          # Das Setup zusätzlich als ZIP: Browser sperren den Download einer unsignierten .exe teils ohne
+          # Möglichkeit zur Freigabe ("wird häufig nicht heruntergeladen"); ein ZIP lassen sie durch.
+          (cd release && 7z a -tzip -mx=1 "M1-Qualifikationscockpit-$v-Setup.zip" "M1-Qualifikationscockpit-$v-Setup.exe" >/dev/null)
+          7z l "release/M1-Qualifikationscockpit-$v-Setup.zip" | grep -F "M1-Qualifikationscockpit-$v-Setup.exe"
           ls -l release
           test -f "release/M1-Qualifikationscockpit-$v-Setup.exe"
           test -f "release/M1-Qualifikationscockpit-$v-Setup.exe.blockmap"
@@ -84,7 +88,8 @@ jobs:
           grep -q "^path: M1-Qualifikationscockpit-$v-Setup.exe" release/latest.yml
           test -f "release/win-unpacked/resources/app-update.yml"
       # Jede neue Versionsnummer auf main wird einmal veröffentlicht. Installierte Programme finden sie dort
-      # und aktualisieren sich selbst (electron/updater.js). Ohne neue Versionsnummer passiert nichts.
+      # und aktualisieren sich selbst (electron/updater.js). Ohne neue Versionsnummer entsteht keine Veröffentlichung;
+      # fehlt einer bestehenden nur das ZIP, wird es nachgereicht.
       - name: Version veröffentlichen (nur main, einmal je Versionsnummer)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
@@ -92,15 +97,27 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(node -p "require('./package.json').version")
+          name="M1-Qualifikationscockpit-$v"
+          notes="Installierte Programme aktualisieren sich selbst. Erste Installation: $name-Setup.zip laden, öffnen und das Setup darin starten. Wer die .exe direkt laden kann, nimmt $name-Setup.exe. Die portable Fassung aktualisiert sich nicht selbst."
           if gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Version $v ist bereits veröffentlicht – nichts zu tun."
+            assets=$(gh release view "v$v" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | tr -d '\r')
+            if grep -qx "$name-Setup.zip" <<<"$assets"; then
+              echo "Version $v ist bereits vollständig veröffentlicht – nichts zu tun."
+              exit 0
+            fi
+            # Veröffentlichung aus einem früheren Lauf ohne ZIP: es entsteht aus genau der veröffentlichten Setup-Datei
+            mkdir -p nachtrag
+            gh release download "v$v" --repo "$GITHUB_REPOSITORY" --pattern "$name-Setup.exe" --dir nachtrag
+            (cd nachtrag && 7z a -tzip -mx=1 "$name-Setup.zip" "$name-Setup.exe" >/dev/null)
+            gh release upload "v$v" --repo "$GITHUB_REPOSITORY" --clobber "nachtrag/$name-Setup.zip"
+            gh release edit "v$v" --repo "$GITHUB_REPOSITORY" --notes "$notes"
+            echo "ZIP für Version $v nachgereicht."
             exit 0
           fi
           test -f release/latest.yml
           gh release create "v$v" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "M1 Qualifikationscockpit $v" \
-            --notes "Installierte Programme aktualisieren sich selbst. Für die erste Installation: M1-Qualifikationscockpit-$v-Setup.exe laden und ausführen. Die portable Fassung aktualisiert sich nicht selbst." \
-            "release/M1-Qualifikationscockpit-$v-Setup.exe" "release/M1-Qualifikationscockpit-$v-Setup.exe.blockmap" release/latest.yml "release/M1-Qualifikationscockpit-$v-portable.exe"
+            --title "M1 Qualifikationscockpit $v" --notes "$notes" \
+            "release/$name-Setup.zip" "release/$name-Setup.exe" "release/$name-Setup.exe.blockmap" release/latest.yml "release/$name-portable.exe"
 
   # Der Ernstfall: Ein installiertes Programm mit älterer Versionsnummer muss die veröffentlichte Version finden,
   # laden, beim Beenden installieren und danach in ihr laufen. Auf main läuft das nach der Veröffentlichung –

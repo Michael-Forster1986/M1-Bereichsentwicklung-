@@ -17,8 +17,15 @@ Die aktuelle Version steht unter **Releases**:
 
 | Datei | Wofür |
 |---|---|
-| `M1-Qualifikationscockpit-<Version>-Setup.exe` | Installation mit Startmenü-Eintrag, ohne Administratorrechte. **Aktualisiert sich danach selbst.** |
+| `M1-Qualifikationscockpit-<Version>-Setup.zip` | **Empfohlen für die erste Installation.** ZIP öffnen und das Setup darin starten. Installiert ohne Administratorrechte; das Programm aktualisiert sich danach selbst. |
+| `M1-Qualifikationscockpit-<Version>-Setup.exe` | Dasselbe Setup ohne ZIP. Manche Browser sperren diesen Download (siehe unten). |
 | `M1-Qualifikationscockpit-<Version>-portable.exe` | Eine Datei, startet ohne Installation. Meldet neue Versionen, ersetzt sich aber nicht selbst. |
+
+**Wenn der Browser den Download sperrt:** Die `.exe`-Dateien sind nicht digital signiert. Microsoft Edge meldet
+dann „… wird häufig nicht heruntergeladen“ und lässt die Datei auf verwalteten Rechnern teils gar nicht frei.
+Das ZIP ist davon nicht betroffen. Nach der ersten Installation spielt der Browser keine Rolle mehr: Neue
+Versionen lädt das Programm selbst. Die dauerhafte Abhilfe ist eine Signatur mit einem Code-Signing-Zertifikat
+oder die Freigabe durch die IT.
 
 ### Automatische Aktualisierung
 
@@ -39,10 +46,9 @@ Zwischenstände jedes Laufs hängen zusätzlich als Artefakte an den Läufen (Re
 | | `…-portable.exe` | Eine Datei, startet ohne Installation |
 | `M1-Qualifikationscockpit-Einzeldatei-HTML` | `M1_Qualifikationscockpit.html` | Dieselbe Oberfläche im Browser, ohne Programm |
 
-Die `.exe`-Dateien sind nicht digital signiert. Windows zeigt beim ersten Start deshalb den Hinweis
-„Der Computer wurde durch Windows geschützt“ (SmartScreen) – über „Weitere Informationen“ →
-„Trotzdem ausführen“ startet das Programm. In verwalteten Umgebungen gibt die IT die Datei frei oder
-signiert sie mit dem Firmenzertifikat.
+Beim ersten Start des Setups zeigt Windows aus demselben Grund den Hinweis „Der Computer wurde durch Windows
+geschützt“ (SmartScreen) – über „Weitere Informationen“ → „Trotzdem ausführen“ startet es. In verwalteten
+Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat.
 
 ## Was das Programm kann
 
@@ -148,7 +154,7 @@ Entwicklungsserver.
 ### Versionen veröffentlichen
 
 Der Lauf auf `main` veröffentlicht jede **neue Versionsnummer** aus `package.json` einmal als Release
-(Setup, portable `.exe`, `latest.yml`). Installierte Programme holen sie sich von dort. Eine Änderung, die
+(Setup als `.exe` und als ZIP, portable `.exe`, `latest.yml`). Installierte Programme holen sie sich von dort. Eine Änderung, die
 ausgeliefert werden soll, braucht deshalb eine höhere Versionsnummer; ohne sie entsteht kein Release.
 Die `.exe`-Dateien sind nicht signiert: Die Echtheit einer Aktualisierung hängt an der HTTPS-Verbindung zu
 GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub-Kontos (Zwei-Faktor-Anmeldung).
