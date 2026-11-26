@@ -3,6 +3,7 @@ import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
+import { courseTargetOf } from './courses.js';
 
 // ---------- Planer -----------------------------------------------------
 /**
@@ -66,7 +67,7 @@ export function runPlan(st, ix, opt = {}) {
     const p = ix.people.get(pk), i = ix.pi.get(pk), fixed = fixedBy.get(pk) || [];
     const open = reason => report.push({ pk, status: 'open', reason });
     if (isLocked(p) || p.cluster === 'offen') { report.push({ pk, status: 'skipped', reason: isLocked(p) ? 'Ausgeschlossen / gesperrt' : 'Cluster offen' }); continue; }
-    const route = routeOf(st, p), cfg = cfgOf(st, p);
+    let route = routeOf(st, p); const cfg = cfgOf(st, p);
     if (!route || !route.length || !cfg) { open('Kein Ausbildungsweg hinterlegt'); continue; }
     if (S.confirmedOnly && !p.confirmed) { open('Voraussetzungen nicht bestätigt; fixierte Termine bleiben erhalten'); continue; }
     if (p.cluster === '5') {
@@ -75,7 +76,11 @@ export function runPlan(st, ix, opt = {}) {
       if (p.target.includes('Kombikurs') && p.level !== 'TEC') { open('Kombikurs nur für Zielstufe TEC'); continue; }
     }
     const needsFrame = ['3', '4B'].includes(p.cluster);
-    if (needsFrame && !p.gate && !fixed.some(e => e.type === 'Praxis') && !creditOf(p, 'Praxis')) { open('Praxis-Kursrahmen oder Abschlussdatum aller Doings fehlt'); continue; }
+    if (needsFrame && !p.gate && !fixed.some(e => e.type === 'Praxis') && !creditOf(p, 'Praxis')) {
+      // Im Blockmodus sucht der Planer selbst einen Platz im Praxis-Lehrgang; der Weg beginnt danach
+      if (blocks && !route.includes('Praxis')) route = ['Praxis', ...route];
+      else { open('Praxis-Kursrahmen oder Abschlussdatum aller Doings fehlt'); continue; }
+    }
     const o = occOf(i);
     const mk = (t, ds, dayAreas, c, partial) => {
       const e = { id: uid(), pk, type: t, auto: true, start: cal.iso[ds[0]], end: cal.iso[ds[ds.length - 1]],
@@ -104,7 +109,7 @@ export function runPlan(st, ix, opt = {}) {
         if (course && fs.some(e => e.courseId || e.courseKind)) continue;      // Teilnahme an einem Lehrgang erfüllt den Schritt
         if (count >= c.days) continue;
         if (course) {
-          const sum = c.trainee + c.mentor + c.tec + c.examiner, offers = st.courses.filter(x => x.type === t && (!x.target || !p.target || x.target === p.target)), why = new Map();
+          const sum = c.trainee + c.mentor + c.tec + c.examiner, offers = st.courses.filter(x => x.type === t && (x.target || '') === courseTargetOf(p)), why = new Map();
           const obstacle = x => {
             const ds = courseDays.get(x.id) || [];
             if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
@@ -123,7 +128,7 @@ export function runPlan(st, ix, opt = {}) {
           if (!hit) {
             failed = true;
             reason = offers.length ? 'Kein passender Lehrgangstermin für ' + t + ' (' + [...why].sort((a, b) => b[1] - a[1]).map(x => x[0]).join(', ') + ')'
-              : 'Kein Lehrgangstermin für ' + t + (p.target ? ' ' + p.target : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
+              : 'Kein Lehrgangstermin für ' + t + (courseTargetOf(p) ? ' ' + courseTargetOf(p) : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
             remaining = [t + ': Lehrgang'];
             for (let q = r + 1; q < route.length; q++) {
               const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);

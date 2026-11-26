@@ -73,7 +73,7 @@ describe('buildWorkbook', () => {
   const sheet = (w, name) => w.sheets.find(s => s.name === name);
 
   it('liefert die Blätter in fester Reihenfolge; Jahresvergleich nur bei mehreren Jahren', () => {
-    expect(wb.sheets.map(s => s.name)).toEqual(['Übersicht', 'Cluster', 'Monatswerte', 'Personen', 'Termine', 'Planungsergebnis', 'Konflikte', 'Tageskapazität', 'Abwesenheiten']);
+    expect(wb.sheets.map(s => s.name)).toEqual(['Übersicht', 'Cluster', 'Monatswerte', 'Personen', 'Termine', 'Lehrgänge', 'Planungsergebnis', 'Konflikte', 'Tageskapazität', 'Abwesenheiten']);
     const two = Core.buildWorkbook(st, { years: [st, Core.demoState({ year: 2028, count: 20, seed: 3 })] });
     expect(two.sheets.map(s => s.name)).toContain('Jahresvergleich');
     expect(sheet(two, 'Jahresvergleich').rows.map(r => r[0])).toEqual([2027, 2028]);
@@ -82,6 +82,7 @@ describe('buildWorkbook', () => {
     expect(sheet(wb, 'Personen').rows).toHaveLength(st.people.length);
     expect(sheet(wb, 'Termine').rows).toHaveLength(st.events.length);
     expect(sheet(wb, 'Abwesenheiten').rows).toHaveLength(st.absences.length);
+    expect(sheet(wb, 'Lehrgänge').rows.filter(r => r[8] !== '')).toHaveLength(st.events.filter(e => e.courseId).length);
     expect(sheet(wb, 'Planungsergebnis').rows).toHaveLength(st.report.length);
     for (const s of wb.sheets) for (const r of s.rows) if (s.columns) expect(r.length, s.name).toBeLessThanOrEqual(s.columns.length);
   });

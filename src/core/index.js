@@ -13,7 +13,7 @@ export { buildIndex, assign, capInfo, eventK } from './indexing.js';
 export { runPlan, scorePlan, planVariants, optimizePlan, betterScore } from './planner.js';
 export { findConflicts } from './conflicts.js';
 export { routeProgress, summarize } from './summary.js';
-export { courseAssess, courseSearch, pickSlots, courseEvents, courseDayList, courseMembers, courseKey, courseDemand, courseWindow, courseCandidates, assessCourse, memberEvent, joinCourse, moveCourse, removeCourse, proposeCourses } from './courses.js';
+export { courseAssess, courseSearch, pickSlots, courseEvents, courseDayList, courseMembers, courseKey, courseTargetOf, courseDemand, courseWindow, courseCandidates, assessCourse, memberEvent, joinCourse, moveCourse, removeCourse, proposeCourses } from './courses.js';
 export { TEMPLATES, HEAD, normHead, parseCSV, rowsToObjects, toCSV } from './csv.js';
 export { checkPeople, applyPeople, checkRoster, applyRoster, checkAbsences, applyAbsences, checkCapacity, checkEvents, courseTypeOf, checkCourses, applyCourses } from './imports.js';
 export { sanitize, migrateLegacy, loadAny, readPayload, normCourse, linkCourses } from './project.js';

@@ -174,3 +174,22 @@ describe('Demo-Daten im Blockmodus', () => {
     expect(Core.summarize(st, ix).underMin).toBe(0);
   });
 });
+
+describe('Praxis-Lehrgang als Voraussetzung (Cluster 3 / 4B)', () => {
+  it('der Planer vergibt den Platz selbst und beginnt den Weg erst danach', () => {
+    const st = bare(), c3 = st.people.filter(p => p.cluster === '3');
+    expect(c3.length).toBeGreaterThan(3);
+    plan(st);
+    expect(st.report.find(r => r.pk === c3[0].pk)).toMatchObject({ status: 'blocked', reason: expect.stringMatching(/Kein Lehrgangstermin für Praxis vorhanden/) });
+    st.courses.push(Core.normCourse({ id: 'CP', type: 'Praxis', title: 'CAT A Praxis', start: '2027-02-01', end: '2027-02-09', seats: 12 }));
+    plan(st); const ix = Core.buildIndex(st), end = ix.cal.idx('2027-02-09');
+    const m = Core.courseMembers(st, 'CP');
+    expect(m.length).toBe(c3.length);
+    for (const p of c3) {
+      const mine = st.events.filter(e => e.pk === p.pk && e.type === 'Practical Logbook');
+      expect(mine.length).toBeGreaterThan(0);
+      expect(Math.min(...mine.flatMap(e => ix.evDays.get(e.id)))).toBeGreaterThan(end);      // Logbook erst nach dem Praxis-Lehrgang
+    }
+    expect(Core.courseDemand(st, ix).find(g => g.type === 'Praxis' && !g.target).open).toEqual([]);
+  });
+});

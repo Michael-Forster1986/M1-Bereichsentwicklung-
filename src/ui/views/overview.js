@@ -16,6 +16,8 @@ function buildHints() {
   if (HARD) add('crit', pl(HARD, 'Termin mit Konflikt', 'Termine mit Konflikten') + ' (Abwesenheit, Dienst, Kollision oder Kapazität).', ['Zum Bericht', 'go', 'report']);
   if (SUM.underMin) add('crit', pl(SUM.underMin, 'Diensttag liegt', 'Diensttage liegen') + ' unter dem Minimum.', ['Kapazität ansehen', 'go', 'capacity']);
   if (SUM.underZero) add('warn', pl(SUM.underZero, 'Diensttag liegt', 'Diensttage liegen') + ' unter dem 0-Punkt.', ['Kapazität ansehen', 'go', 'capacity']);
+  const noSeat = Core.courseDemand(S, IX).reduce((n, g) => n + g.open.length, 0);
+  if (noSeat) add('warn', pl(noSeat, 'Person braucht', 'Personen brauchen') + ' noch einen Lehrgangsplatz.', ['Lehrgänge planen', 'go', 'courses']);
   if (SUM.route.partial) add('warn', pl(SUM.route.partial, 'Ausbildungsweg lässt', 'Ausbildungswege lassen') + ' sich ' + S.meta.year + ' nur teilweise einplanen.', ['Zum Bericht', 'go', 'report']);
   if (SUM.route.none) add('warn', pl(SUM.route.none, 'Person mit Ausbildungsweg hat', 'Personen mit Ausbildungsweg haben') + ' noch keine Termine.', ['Zum Bericht', 'go', 'report']);
   const noRoster = S.people.filter(p => !S.roster[p.pk]).length;

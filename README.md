@@ -30,14 +30,30 @@ signiert sie mit dem Firmenzertifikat.
 
 | Bereich | Funktionen |
 |---|---|
-| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt), Kapazität je Bereich und Dienst, Lehrgangssuche |
+| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen, Kapazität je Bereich und Dienst |
+| Lehrgänge | Lehrgänge als zusammenhängende Blöcke mit Plätzen und Teilnehmern: Bedarf je Art, Zeitleiste, Termine einspielen, beste Zeiträume und beste Besetzung berechnen |
 | Stammdaten | Personen & Cluster, Ausbildungswege (je Cluster oder individuell), Termine, Abwesenheiten, Ferien, Feiertage |
 | Planer | Vergleich vieler Reihenfolgen, Vorher/Nachher-Vergleich, fixierte Termine bleiben stehen, Kapazitäts- oder Szenariomodus |
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
-| Importe | Stammdaten (CSV, Excel), Dienstplan, Abwesenheiten, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
+| Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
+| Echtbetrieb | Karte „Bereit für die echte Planung?“, simulierte Daten entfernen (Personen, Qualifikationen und Cluster bleiben) |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
 | Mehrere Jahre | Planungsjahre in einem Projekt, Folgejahr anlegen mit Übernahme, Vorleistungen aus Vorjahren, Jahresvergleich |
 | Datenschutz | Kein Netzwerkzugriff, „Namen verbergen“, pseudonymisierter Export mit getrennter Schlüsseldatei |
+
+### Lehrgänge
+
+Lehrgänge (TEC, CAT A, CAT Praxis …) werden nicht tageweise verteilt, sondern als Block mit Zeitraum und Plätzen
+geführt. Feste Termine werden eingespielt; für den übrigen Bedarf sucht das Programm die Zeiträume, in denen die
+größte Gruppe teilnehmen kann, ohne dass an einem Lehrgangstag die Grenze der Produktion unterschritten wird.
+„Neu berechnen“ vergibt freie Plätze in der Reihenfolge des Ausbildungswegs. Lehrgänge mit Zielmuster gelten für
+Cluster 5 mit genau diesem Muster, Lehrgänge ohne Zielmuster für den CAT-A-Kursrahmen der übrigen Cluster.
+
+### Ziehen und Ablegen
+
+Im Jahresplan lassen sich Ausbildungselemente auf eine Person ziehen, Balken verschieben und Personen auf einen
+Lehrgangsplatz setzen. Schon beim Ziehen zeigt jeder Tag grün, gelb oder rot, ob die Kapazität reicht; beim Ablegen
+folgt die Prüfung. Gegen die Grenze wird nie stillschweigend geplant.
 
 ### Mehrere Planungsjahre
 
@@ -63,7 +79,7 @@ als Simulation um 52 Wochen fortgeschrieben werden, bis der echte vorliegt.
 
 | Ordner | Inhalt |
 |---|---|
-| `src/core/` | Rechenkern ohne Oberfläche: Kalender, Kapazität, Planer, Konflikte, Importe, Projektdatei, Jahreswechsel, Berichte, Excel-Schreiber |
+| `src/core/` | Rechenkern ohne Oberfläche: Kalender, Kapazität, Planer, Lehrgänge, Konflikte, Importe (auch Tagestabellen), Prüfung beim Ablegen, Projektdatei, Jahreswechsel, Berichte, Excel-Schreiber |
 | `src/ui/` | Oberfläche: Zustand und Rückgängig, Dialoge, Ansichten (`views/`), Ausgaben, Desktop-Anbindung |
 | `src/platform/` | Brücke zum Desktop-Programm (im Browser ohne Funktion) |
 | `src/styles/` | Gestaltung |
@@ -109,7 +125,9 @@ Entwicklungsserver.
 
 - **Gleichheit mit der HTML-Fassung:** `tests/parity.test.js` lädt den Rechenkern aus
   `legacy/M1_Qualifikationscockpit_v4.html` und vergleicht Demo-Daten, Index, Planung in mehreren
-  Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung.
+  Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
+  bisherigen Modus (Kurse tageweise); Lehrgänge als Blöcke, Urlaubsplan-Import und die Prüfung beim Ablegen haben
+  eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
-  Wiederherstellung und den Jahreswechsel – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`).
+  Wiederherstellung, den Jahreswechsel, den Urlaubsplan-Import aus Excel, Lehrgangsvorschläge und das Ziehen im Jahresplan – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`).

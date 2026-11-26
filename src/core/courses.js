@@ -143,6 +143,11 @@ export function courseDayList(ix, c) {
 }
 export const courseMembers = (st, id) => st.events.filter(e => e.courseId === id);
 export const courseKey = c => c.type + '|' + c.title + '|' + c.start + '|' + c.end;
+/**
+ * Für wen ein Lehrgang gedacht ist: Lehrgänge mit Zielmuster (TEC A330 …) gelten für Cluster 5 mit genau diesem Muster,
+ * Lehrgänge ohne Zielmuster (CAT-A-Kursrahmen) für alle übrigen Cluster. So landet niemand im Lehrgang einer anderen Gruppe.
+ */
+export const courseTargetOf = p => p && p.cluster === '5' ? (p.target || '') : '';
 /** Ein Lehrgangsplatz gilt als vergeben durch einen Lehrgangstermin, einen fixierten Termin der Art oder ausreichende Vorleistung. */
 const hasCoursePlace = (p, t, evs, need) => evs.some(e => e.type === t && (e.courseId || e.courseKind || !e.auto)) || (need > 0 && creditOf(p, t) >= need);
 
@@ -158,9 +163,9 @@ export function courseDemand(st, ix) {
     const need = new Map(route.filter(isCourseType).map(t => [t, false]));
     if (['3', '4B'].includes(p.cluster) && !p.gate && !need.has('Praxis')) need.set('Praxis', true);
     for (const [t, prereq] of need) {
-      const key = t + '|' + (p.target || '');
+      const target = courseTargetOf(p), key = t + '|' + target;
       let g = groups.get(key);
-      if (!g) groups.set(key, g = { key, type: t, target: p.target || '', days: null, all: [], open: [], placed: [], prereq: 0 });
+      if (!g) groups.set(key, g = { key, type: t, target, days: null, all: [], open: [], placed: [], prereq: 0 });
       const days = Number.isInteger(cfg[t]?.days) && cfg[t].days > 0 ? cfg[t].days : null;
       if (days && (!g.days || days > g.days)) g.days = days;
       g.all.push(p.pk); if (prereq) g.prereq++;
@@ -184,7 +189,7 @@ export function courseWindow(st, ix, p, type) {
 /** Personen, die für einen Lehrgang in Frage kommen: Bedarf an dieser Art (und diesem Zielmuster), noch ohne Platz. */
 export function courseCandidates(st, ix, c) {
   const have = new Set(courseMembers(st, c.id).map(e => e.pk)), out = [];
-  for (const g of courseDemand(st, ix)) if (g.type === c.type && (!c.target || g.target === c.target)) for (const pk of g.open) if (!have.has(pk)) out.push(pk);
+  for (const g of courseDemand(st, ix)) if (g.type === c.type && g.target === (c.target || '')) for (const pk of g.open) if (!have.has(pk)) out.push(pk);
   const pr = pk => Number(ix.people.get(pk)?.priority) || 3;
   return out.sort((a, b) => pr(a) - pr(b) || ix.pi.get(a) - ix.pi.get(b));
 }
@@ -247,7 +252,7 @@ export function removeCourse(st, id) {
  */
 export function proposeCourses(st, ix0, o) {
   const work = { ...st, events: st.events.slice() }, out = [], minGroup = Math.max(1, o.minGroup || 1), busy = [];
-  if (o.nonOverlap !== false) for (const c of st.courses) if (c.type === o.type && (!o.target || !c.target || c.target === o.target)) busy.push([c.start, c.end]);
+  if (o.nonOverlap !== false) for (const c of st.courses) if (c.type === o.type && (c.target || '') === (o.target || '')) busy.push([c.start, c.end]);
   let ix = ix0, pool = [...new Set(o.pks)].filter(pk => ix.pi.has(pk));
   while (pool.length >= minGroup && out.length < (o.maxCourses || 12)) {
     const window = new Map(pool.map(pk => [pk, courseWindow(work, ix, ix.people.get(pk), o.type)]));
