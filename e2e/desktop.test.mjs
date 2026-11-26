@@ -339,16 +339,20 @@ test('Ausbildungswege: Reihenfolge per Ziehen, eigener Schritt und zulässige Di
   await page.click('.rt-card >> nth=1');                                     // Cluster 2: Logbook, FitCheck, ICA
   const order = () => page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-sortable] .rt-step[data-step]')].map(x => x.dataset.step));
   assert.deepEqual(await order(), ['Practical Logbook', 'FitCheck', 'ICA']);
-  // Kachel am Kopf greifen und an den Anfang ziehen
-  const grip = await page.locator('.rt-step[data-step="ICA"] .rt-sh b').boundingBox(), first = await page.locator('.rt-step[data-step] >> nth=0').boundingBox();
+  // Kachel am Kopf greifen und vor die Nachbarkachel ziehen. Beide zuerst in den sichtbaren Bereich holen –
+  // auf kleinen Bildschirmen liegt der Ablauf sonst unterhalb oder rechts außerhalb des Fensters.
+  await page.evaluate(() => document.querySelector('.rt-step[data-step="FitCheck"]').scrollIntoView({ block: 'center', inline: 'start' }));
+  const grip = await page.locator('.rt-step[data-step="ICA"] .rt-sh b').boundingBox(), target = await page.locator('.rt-step[data-step="FitCheck"]').boundingBox();
+  const view = page.viewportSize() || await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  assert.ok(grip.x > 0 && grip.x + 8 < view.width && grip.y > 0 && grip.y < view.height, 'die Kachel liegt im sichtbaren Bereich');
   await page.mouse.move(grip.x + 8, grip.y + grip.height / 2); await page.mouse.down();
-  await page.mouse.move(grip.x - 40, grip.y + 4, { steps: 4 }); await page.mouse.move(first.x + 15, first.y + 20, { steps: 8 });
-  await waitFor(() => page.evaluate(() => !!document.querySelector('.rt-step.drop-before')), 'Marke an der Zielstelle');
+  await page.mouse.move(grip.x - 30, grip.y + 4, { steps: 4 }); await page.mouse.move(target.x + 20, target.y + 30, { steps: 8 });
+  await waitFor(() => page.evaluate(() => (document.querySelector('.rt-step.drop-before') || { dataset: {} }).dataset.step === 'FitCheck'), 'Marke an der Zielstelle');
   await page.mouse.up();
-  await waitFor(async () => (await order())[0] === 'ICA', 'neue Reihenfolge');
-  assert.deepEqual(await order(), ['ICA', 'Practical Logbook', 'FitCheck']);
-  // dasselbe mit den Pfeilen zurück
-  await page.click('[data-act="route-move"][data-t="ICA"][data-dir="1"]'); await page.click('[data-act="route-move"][data-t="ICA"][data-dir="1"]');
+  await waitFor(async () => (await order())[1] === 'ICA', 'neue Reihenfolge');
+  assert.deepEqual(await order(), ['Practical Logbook', 'ICA', 'FitCheck']);
+  // mit dem Pfeil zurück
+  await page.click('[data-act="route-move"][data-t="ICA"][data-dir="1"]');
   assert.deepEqual(await order(), ['Practical Logbook', 'FitCheck', 'ICA']);
   // eigener Schritt: im Spätdienst zulässig, zwei Tage, gleich im Weg
   await page.click('#msCard [data-act="measure-new"]'); await page.waitForSelector('#msName');
