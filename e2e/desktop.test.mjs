@@ -12,12 +12,14 @@ import { _electron } from 'playwright-core';
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'm1-e2e-'));
 const USER_DATA = path.join(TMP, 'profil');
-const ARGS = ['.', '--user-data-dir=' + USER_DATA, ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
+// M1_APP=<Pfad zur gepackten Programmdatei> prüft das fertige Programm statt des Quellstands
+const PACKAGED = process.env.M1_APP || '';
+const ARGS = [...(PACKAGED ? [] : ['.']), '--user-data-dir=' + USER_DATA, ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
 let app, page;
 const errors = [];
 
 async function launch(extra = []) {
-  app = await _electron.launch({ cwd: ROOT, args: [...ARGS, ...extra] });
+  app = await _electron.launch({ cwd: ROOT, args: [...ARGS, ...extra], ...(PACKAGED ? { executablePath: PACKAGED } : {}) });
   page = await app.firstWindow();
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
