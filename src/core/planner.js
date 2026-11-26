@@ -1,7 +1,7 @@
 import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS } from './constants.js';
 import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
-import { cfgOf, isLocked, routeOf } from './people.js';
+import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
 
 // ---------- Planer -----------------------------------------------------
@@ -69,7 +69,7 @@ export function runPlan(st, ix, opt = {}) {
       if (p.target.includes('Kombikurs') && p.level !== 'TEC') { open('Kombikurs nur für Zielstufe TEC'); continue; }
     }
     const needsFrame = ['3', '4B'].includes(p.cluster);
-    if (needsFrame && !p.gate && !fixed.some(e => e.type === 'Praxis')) { open('Praxis-Kursrahmen oder Abschlussdatum aller Doings fehlt'); continue; }
+    if (needsFrame && !p.gate && !fixed.some(e => e.type === 'Praxis') && !creditOf(p, 'Praxis')) { open('Praxis-Kursrahmen oder Abschlussdatum aller Doings fehlt'); continue; }
     const o = occOf(i);
     const mk = (t, ds, dayAreas, c, partial) => {
       const e = { id: uid(), pk, type: t, auto: true, start: cal.iso[ds[0]], end: cal.iso[ds[ds.length - 1]],
@@ -91,7 +91,7 @@ export function runPlan(st, ix, opt = {}) {
       for (let r = 0; r < route.length; r++) {
         const t = route[r], c = cfg[t];
         if (!c || !Number.isInteger(c.days) || c.days < 1 || c.trainee == null) { reason = 'Dauer oder Produktivitätsverlust fehlt: ' + t; hardFail = true; break; }
-        const fs = fixed.filter(e => e.type === t), count = fs.reduce((s, e) => s + dayCount(e), 0);
+        const fs = fixed.filter(e => e.type === t), count = fs.reduce((s, e) => s + dayCount(e), 0) + creditOf(p, t);   // Vorleistung aus Vorjahren zählt wie fixierte Tage
         for (const e of fs) cursor = Math.max(cursor, endIdx(e) + 1);
         if (count >= c.days) continue;
         const rot = t === LOGBOOK && Array.isArray(p.rotation) ? p.rotation : null;
@@ -125,7 +125,7 @@ export function runPlan(st, ix, opt = {}) {
           reason = 'Nicht genügend zulässige Tage für ' + t + ' (' + ds.length + '/' + need + ')';
           remaining = [t + ': ' + (need - ds.length) + ' Tage'];
           for (let q = r + 1; q < route.length; q++) {
-            const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0);
+            const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);
             if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (c2.days - have) + ' Tage');
           }
           if (allowPartial && ds.length) local.push(mk(t, ds, dayAreas, c, true)); else undo(ds.length);
@@ -180,7 +180,7 @@ export function runPlan(st, ix, opt = {}) {
     const lastEnd = local.filter(e => e.type !== PREP).map(e => e.end).sort().pop();
     if (res.state === 'partial') report.push({ pk, status: 'partial', reason: res.reason + ' · ' + local.length + ' Maßnahmen bis ' + fmtDE(lastEnd), remaining: res.remaining });
     else if (local.length) report.push({ pk, status: 'planned', reason: local.length + ' neue Maßnahmen · Abschluss ' + fmtDE(lastEnd) + (fixed.length ? ' · ' + fixed.length + ' fixierte Termine berücksichtigt' : '') });
-    else report.push({ pk, status: 'kept', reason: 'Weg durch ' + fixed.length + ' fixierte Termine abgedeckt; keine neuen Termine nötig' });
+    else report.push({ pk, status: 'kept', reason: p.credit && !fixed.length ? 'Weg durch Vorleistungen aus Vorjahren abgedeckt; keine neuen Termine nötig' : 'Weg durch ' + fixed.length + ' fixierte Termine' + (p.credit ? ' und Vorleistungen aus Vorjahren' : '') + ' abgedeckt; keine neuen Termine nötig' });
   }
   return { events, report, ledger: L };
 }

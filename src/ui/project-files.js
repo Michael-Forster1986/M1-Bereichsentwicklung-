@@ -3,12 +3,18 @@ import { desktop, isDesktop } from '../platform/desktop.js';
 import { download, fname, pickFile, snapshotHtml } from './files.js';
 import { $, html } from './dom.js';
 import { nf } from './format.js';
-import { DOC, PRJ, S, markSaved, projectClass, replaceProject, replaceState } from './state.js';
+import { DOC, PRJ, S, UI, markSaved, projectClass, replaceProject, replaceState } from './state.js';
 import { closeModal, openModal, toast } from './dialogs.js';
 import { ACT } from './registry.js';
-import { go, renderTop } from './shell.js';
+import { go, render, renderTop } from './shell.js';
 
 // ---------- Projektdateien ---------------------------------------------------
+let recent = [];
+/** Zuletzt geöffnete Dateien (nur Desktop); die Liste führt der Hauptprozess. */
+export const recentFiles = () => recent;
+export function refreshRecent() {
+  if (isDesktop) desktop.recent().then(list => { recent = list || []; if (UI.view === 'data') render(); }).catch(() => {});
+}
 /**
  * Sichert das Projekt. Desktop: in die geöffnete Datei, sonst mit Dateidialog („Speichern unter“);
  * vor dem Überschreiben legt der Hauptprozess eine Sicherungskopie (.bak) an. Browser: als Download.
@@ -22,7 +28,7 @@ export async function saveProject(saveAs = false) {
   }
   const res = await desktop.saveProject({ token: saveAs ? '' : DOC.token, text, suggestedName: fname('Projekt', desktop.info.ext || 'm1cockpit', { project: true, dated: false }) });
   if (!res) return false;                                   // im Dateidialog abgebrochen
-  markSaved({ token: res.token, name: res.name, path: res.path }); renderTop();
+  markSaved({ token: res.token, name: res.name, path: res.path }); renderTop(); refreshRecent();
   desktop.recovery.clear();
   toast('Gespeichert: ' + res.name + note);
   return true;
@@ -48,7 +54,7 @@ export function presentLoad(text, fileName, doc = null) {
     handlers: { ok: () => {
       closeModal();
       replaceProject(prj, res.kind + ' geladen: ' + st.people.length + ' Personen', doc && res.native ? doc : null);
-      go('overview');
+      refreshRecent(); go('overview');
     } } });
 }
 ACT['save-project'] = () => saveProject(false);

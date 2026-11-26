@@ -1,6 +1,6 @@
 import { CLUSTERS, EPS, PREP } from './constants.js';
 import { num } from './util.js';
-import { cfgOf, isLocked, routeOf } from './people.js';
+import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 
 // ---------- Auswertung -------------------------------------------------
 export function routeProgress(st, ix, p) {
@@ -8,9 +8,9 @@ export function routeProgress(st, ix, p) {
   if (isLocked(p)) return { state: 'locked', steps: [] };
   if (p.cluster === 'offen' || !route || !cfg) return { state: 'unassigned', steps: [] };
   const steps = route.map(t => {
-    const need = cfg[t]?.days || 0; let have = 0, fixed = 0;
+    const need = cfg[t]?.days || 0, credit = creditOf(p, t); let have = credit, fixed = 0;
     for (const e of evs) if (e.type === t) { const n = (ix.evDays.get(e.id) || []).length; have += n; if (!e.auto) fixed += n; }
-    return { type: t, need, have: Math.min(have, need || have), fixed, over: Math.max(0, have - need) };
+    return { type: t, need, have: Math.min(have, need || have), fixed, over: Math.max(0, have - need), ...(credit ? { credit: Math.min(credit, need || credit) } : {}) };
   });
   const done = steps.every(s => s.need > 0 && s.have >= s.need), any = steps.some(s => s.have > 0);
   let end = '';

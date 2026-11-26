@@ -39,6 +39,8 @@ export function normPerson(p) {
     out.customRoute = { steps: TYPES.filter(t => p.customRoute.steps.includes(t)), config: cfg };
   }
   if (p.targetAssumed) out.targetAssumed = true;
+  const credit = normCredit(p.credit);
+  if (credit) out.credit = credit;
   return out;
 }
 export const normCfg = c => ({
@@ -46,6 +48,15 @@ export const normCfg = c => ({
   trainee: c && c.trainee != null && fin(+c.trainee) ? clamp(+c.trainee, 0, 5) : null,
   mentor: c ? clamp(num(c.mentor), 0, 5) : 0, tec: c ? clamp(num(c.tec), 0, 5) : 0, examiner: c ? clamp(num(c.examiner), 0, 5) : 0
 });
+/** Vorleistung: bereits erbrachte Tage je Maßnahme aus Vorjahren ({ Maßnahme: Tage }); null, wenn keine. */
+export function normCredit(c) {
+  if (!c || typeof c !== 'object') return null;
+  const out = {};
+  for (const t of TYPES) { const v = Math.round(num(c[t])); if (v > 0) out[t] = clamp(v, 1, 999); }
+  return Object.keys(out).length ? out : null;
+}
+/** Bereits erbrachte Tage einer Person für eine Maßnahme. */
+export const creditOf = (p, t) => (p.credit && p.credit[t]) || 0;
 /** Vergibt Pseudonyme P-001… in zufälliger Reihenfolge (keine Rückschlüsse aus der Sortierung). */
 export function assignAliases(people, rnd = Math.random) {
   const used = new Set(people.map(p => p.alias).filter(Boolean));

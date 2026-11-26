@@ -2,11 +2,13 @@ import * as Core from '../../core/index.js';
 import { csvDownload, download, pickFile, templateDownload } from '../files.js';
 import { $, html, raw } from '../dom.js';
 import { DATA_CLASS, fmt, fmtS, nf } from '../format.js';
-import { isDesktop } from '../../platform/desktop.js';
-import { CONF, IX, S, SUM, autosaveOn, clearAutosave, commit, privacy, resetAll, setAutosave } from '../state.js';
+import { desktop, isDesktop } from '../../platform/desktop.js';
+import { CONF, DOC, IX, S, SUM, autosaveOn, clearAutosave, commit, privacy, resetAll, setAutosave } from '../state.js';
+import { recentFiles } from '../project-files.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, VIEWS } from '../registry.js';
 import { go, render } from '../shell.js';
+import { yearsCard } from './years.js';
 
 // ---------- Daten & Datenschutz -------------------------------------------------------
 const IMP = { from: '', to: '', gaps: false, complete: false };
@@ -18,7 +20,7 @@ function importPreview({ title, file, facts, chk, apply, extra }) {
   openModal({ title, wide: true, body: html`
     <div class="cmp" style="grid-template-columns:1fr 1.4fr"><div class="h">Datei</div><div class="h">${file}</div>${facts.map(([k, v]) => html`<div>${k}</div><div class="n">${v}</div>`)}</div>
     ${extra || ''}
-    ${errs.length ? html`<div class="note crit"><b>Nicht übernehmbar – ${errs.length} Fehler:</b>${errs.slice(0, 20).map(e => html`<div>${e}</div>`)}</div>` : html`<div class="note good">Prüfung bestanden. Es wird nichts übertragen – die Datei bleibt in diesem Browserfenster.</div>`}
+    ${errs.length ? html`<div class="note crit"><b>Nicht übernehmbar – ${errs.length} Fehler:</b>${errs.slice(0, 20).map(e => html`<div>${e}</div>`)}</div>` : html`<div class="note good">Prüfung bestanden. Es wird nichts übertragen – die Datei bleibt ${isDesktop ? 'auf diesem Rechner' : 'in diesem Browserfenster'}.</div>`}
     ${warns.length ? html`<div class="note warn">${warns.slice(0, 12).map(w => html`<div>${w}</div>`)}${warns.length > 12 ? html`<div>… ${warns.length - 12} weitere Hinweise</div>` : ''}</div>` : ''}`,
     footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok" ${errs.length ? raw('disabled') : ''}>Übernehmen</button>`,
     handlers: { ok: () => { const r = apply(); if (r !== false) closeModal(); } } });
@@ -110,6 +112,7 @@ CHG.autosave = t => {
   toast(t.checked ? (isDesktop ? 'Wiederherstellungskopie eingeschaltet' : 'Zwischenspeichern im Browser eingeschaltet') : (isDesktop ? 'Wiederherstellungskopie ausgeschaltet und gelöscht' : 'Zwischenspeicher ausgeschaltet und geleert'));
   render();
 };
+CHG.backups = t => { desktop.settings.set('backups', t.checked); toast(t.checked ? 'Sicherungskopie beim Speichern eingeschaltet' : 'Sicherungskopie beim Speichern ausgeschaltet – vorhandene .bak-Dateien bleiben liegen'); render(); };
 ACT['wipe'] = async () => {
   if (!await confirmDlg('Alle Daten aus diesem Fenster entfernen', 'Planungsstand, Rückgängig-Verlauf und ' + (isDesktop ? 'Wiederherstellungskopie' : 'Browser-Zwischenspeicher') + ' werden geleert. Nicht gesicherte Änderungen gehen verloren.' + (isDesktop ? ' Gespeicherte Projektdateien bleiben unberührt.' : ''), 'Alles entfernen', true)) return;
   clearAutosave(); resetAll(Core.emptyState(S.meta.year)); go('data');
@@ -122,7 +125,7 @@ VIEWS.data = {
     const card = (title, text, buttons, extra = '') => html`<div class="dc"><h3>${title}</h3><p>${text}</p>${extra}<div class="row">${buttons}</div></div>`;
     const tpl = k => html`<button class="btn sm" data-act="tpl" data-k="${k}">Leere Vorlage</button>`;
     return html`
-    <div class="view-head"><div><h1>Daten & Datenschutz</h1><p>Dieses Programm enthält keine Personendaten. Reale Daten laden Sie erst in Ihrer geschützten Umgebung; sie bleiben in diesem Browserfenster und in den Dateien, die Sie selbst sichern.</p></div></div>
+    <div class="view-head"><div><h1>Daten & Datenschutz</h1><p>Dieses Programm enthält keine Personendaten. Reale Daten laden Sie erst in Ihrer geschützten Umgebung; sie bleiben ${isDesktop ? 'auf diesem Rechner – im Programmfenster und in den Dateien, die Sie selbst speichern' : 'in diesem Browserfenster und in den Dateien, die Sie selbst sichern'}.</p></div></div>
     <div class="kpis" style="grid-template-columns:repeat(5,minmax(0,1fr));margin-bottom:14px">
       <div class="kpi"><div class="l">Stammdaten</div><div class="v">${nf(S.people.length)}</div><div class="s">${DATA_CLASS[S.meta.dataClass][0]}</div></div>
       <div class="kpi"><div class="l">Dienstplan</div><div class="v">${S.people.length ? nf(withRoster / S.people.length * 100) + ' %' : '–'}</div><div class="s">${nf(covered)} Tage · ${withRoster ? (sim.roster ? 'simuliert' : 'real') : 'nicht geladen'}</div></div>
@@ -131,7 +134,8 @@ VIEWS.data = {
       <div class="kpi"><div class="l">Kalender</div><div class="v">${nf(S.holidays.length)}</div><div class="s">Feiertage · ${nf(S.school.length)} Ferienzeiträume</div></div>
     </div>
     <div class="card" style="margin-bottom:14px"><h3>1 · Vorhandenen Stand übernehmen</h3><div class="sub">Der schnellste Weg von der Vorgängerversion: deren HTML-Datei oder JSON-Sicherung direkt laden – Personen, Dienstplan, Abwesenheiten, Termine, Wege und Einstellungen kommen vollständig mit.</div>
-      <div class="row"><button class="btn primary" data-act="load-project">Projektdatei oder Vorgänger-Datei laden</button><span class="small muted">Formate: Projektdatei (.json) · „M1 Jahressimulation“ 3.x als .html oder .json</span></div></div>
+      <div class="row"><button class="btn primary" data-act="load-project">${isDesktop ? 'Projekt oder Vorgänger-Datei öffnen' : 'Projektdatei oder Vorgänger-Datei laden'}</button><span class="small muted">Formate: Projektdatei (.m1cockpit, .json) · Einzeldatei-Fassung als .json oder .html · „M1 Jahressimulation“ 3.x als .html oder .json</span></div>
+      ${recentFiles().length ? html`<div class="row small" style="margin-top:10px"><span class="ink2">Zuletzt geöffnet:</span>${recentFiles().slice(0, 5).map(f => html`<button class="btn sm" data-act="open-recent" data-i="${f.index}" data-tip="${f.dir}">${f.name}</button>`)}</div>` : ''}</div>
     <div class="card" style="margin-bottom:14px"><h3>2 · Einzelne Datenbereiche laden</h3><div class="sub">CSV mit Semikolon, Komma oder Tabulator; Datum als JJJJ-MM-TT oder TT.MM.JJJJ. Jede Datei wird zuerst geprüft und als Vorschau gezeigt.</div>
       <div class="row" style="margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border-radius:8px">
         <span class="small ink2">Zeitraum für Dienstplan und Abwesenheiten</span>
@@ -150,22 +154,26 @@ VIEWS.data = {
     <div class="grid2" style="margin-bottom:14px">
       <div class="card"><h3>3 · Sichern und weitergeben</h3><div class="sub">Dateien mit Personendaten tragen „VERTRAULICH“ im Namen</div>
         <div class="stack" style="gap:10px">
-          <div class="row"><button class="btn primary" data-act="save-project">Projektdatei sichern</button><span class="small ink2 grow">Vollständiger Stand als JSON – zum Weiterarbeiten wieder laden.</span></div>
-          <div class="row"><button class="btn" data-act="save-snapshot">Programm mit Stand sichern</button><span class="small ink2 grow">Eine HTML-Datei, die beim Öffnen genau diesen Stand zeigt.</span></div>
+          ${isDesktop ? html`<div class="row"><button class="btn primary" data-act="save-project">Projekt speichern</button><button class="btn" data-act="save-project-as">Speichern unter …</button><span class="small ink2 grow">${DOC.name ? 'Geöffnet: ' + DOC.name : 'Noch nicht gespeichert'} · alle Planungsjahre in einer Projektdatei (.m1cockpit).</span></div>`
+            : html`<div class="row"><button class="btn primary" data-act="save-project">Projektdatei sichern</button><span class="small ink2 grow">Vollständiger Stand als JSON – zum Weiterarbeiten wieder laden.</span></div>`}
+          <div class="row"><button class="btn" data-act="save-snapshot">Programm mit Stand sichern</button><span class="small ink2 grow">Eine HTML-Datei, die beim Öffnen genau diesen Stand zeigt${isDesktop ? ' – zum Weitergeben an Personen ohne das Programm' : ''}.</span></div>
           <div class="row"><button class="btn" data-act="exp-pseudo">Pseudonymisiert sichern</button><span class="small ink2 grow">Projektdatei ohne Namen und Personalnummern (P-001 …) plus getrennte Schlüsseldatei.</span></div>
           <div class="row"><button class="btn" data-act="imp-key">Schlüsseldatei anwenden</button><span class="small ink2 grow">Ordnet einem pseudonymisierten Stand Namen und Nummern wieder zu.</span>${tpl('key')}</div>
+          <div class="row small"><span class="ink2">Berichte:</span><button class="btn sm" data-act="export-xlsx" data-tip="Alle Tabellen des Planungsjahres ${S.meta.year} als Excel-Arbeitsmappe (.xlsx)">Excel-Arbeitsmappe</button><button class="btn sm" data-act="go" data-id="fullreport" data-tip="Druckfertige Zusammenfassung – als PDF speicherbar">Gesamtbericht (PDF)</button></div>
           <div class="row small"><span class="ink2">Auswertungen als CSV:</span><button class="btn sm" data-act="events-export">Termine</button><button class="btn sm" data-act="report-export">Bericht</button><button class="btn sm" data-act="cap-export">Tageskapazität</button><button class="btn sm" data-act="people-export">Personen</button></div>
         </div></div>
       <div class="card"><h3>Datenschutz in diesem Programm</h3><div class="sub">Technisch abgesichert, nicht nur zugesagt</div>
         <ul class="hints">
-          <li><span class="ic good">✓</span><span><b>Keine Übertragung.</b> Eine Inhaltsrichtlinie in der Datei sperrt jede Netzwerkverbindung; es gibt keine externen Bibliotheken, Schriften oder Zähler.</span></li>
-          <li><span class="ic good">✓</span><span><b>Keine eingebetteten Personen.</b> Die Programmdatei enthält nur Logik und Vorgabewerte. Demo-Daten werden beim Start zufällig erzeugt.</span></li>
+          <li><span class="ic good">✓</span><span><b>Keine Übertragung.</b> ${isDesktop ? 'Das Programm baut keine Netzwerkverbindungen auf: eine Inhaltsrichtlinie und eine Sperre im Programm weisen alles außer den eigenen Programmdateien ab. Es gibt keine externen Bibliotheken, Schriften, Zähler oder automatischen Aktualisierungen.' : 'Eine Inhaltsrichtlinie in der Datei sperrt jede Netzwerkverbindung; es gibt keine externen Bibliotheken, Schriften oder Zähler.'}</span></li>
+          <li><span class="ic good">✓</span><span><b>Keine eingebetteten Personen.</b> ${isDesktop ? 'Das Programm' : 'Die Programmdatei'} enthält nur Logik und Vorgabewerte. Demo-Daten werden beim Start zufällig erzeugt.</span></li>
           <li><span class="ic ${privacy() ? 'good' : ''}">${privacy() ? '✓' : 'i'}</span><span class="grow"><b>Namen verbergen.</b> Zeigt überall Pseudonyme statt Namen und Personalnummern – für Besprechungen und Bildschirmfotos.</span><button class="btn sm ${privacy() ? 'on' : ''}" data-act="toggle-privacy">${privacy() ? 'Namen zeigen' : 'Namen verbergen'}</button></li>
-          <li><span class="ic ${on ? 'warn' : 'good'}">${on ? '!' : '✓'}</span><span class="grow"><b>Zwischenspeichern im Browser.</b> Standardmäßig aus: nichts bleibt nach dem Schließen zurück. Eingeschaltet liegt der Stand im Browserprofil dieses Rechners.</span><label class="c small nowrap"><input type="checkbox" data-chg="autosave" ${on ? raw('checked') : ''}> einschalten</label></li>
+          <li><span class="ic ${on ? 'warn' : 'good'}">${on ? '!' : '✓'}</span><span class="grow">${isDesktop ? html`<b>Wiederherstellungskopie.</b> Standardmäßig aus: außerhalb Ihrer Projektdateien bleibt nichts zurück. Eingeschaltet liegt bei ungespeicherten Änderungen eine Kopie des Stands im Benutzerprofil dieses Rechners und wird nach einem Absturz angeboten.` : html`<b>Zwischenspeichern im Browser.</b> Standardmäßig aus: nichts bleibt nach dem Schließen zurück. Eingeschaltet liegt der Stand im Browserprofil dieses Rechners.`}</span><label class="c small nowrap"><input type="checkbox" data-chg="autosave" ${on ? raw('checked') : ''}> einschalten</label></li>
+          ${isDesktop ? html`<li><span class="ic ${desktop.settings.get('backups') ? '' : 'good'}">${desktop.settings.get('backups') ? 'i' : '✓'}</span><span class="grow"><b>Sicherungskopie beim Speichern.</b> Vor dem Überschreiben bleibt der vorherige Stand als Datei mit der Endung .bak neben der Projektdatei erhalten. Die Kopie enthält dieselben Personendaten wie die Projektdatei.</span><label class="c small nowrap"><input type="checkbox" data-chg="backups" ${desktop.settings.get('backups') ? raw('checked') : ''}> anlegen</label></li>` : ''}
           <li><span class="ic">i</span><span class="grow"><b>Pseudonymisiert ist nicht anonym.</b> Wer die Schlüsseldatei oder genaue Kenntnis der Qualifikationen hat, kann Personen zuordnen. Schlüsseldatei getrennt und geschützt aufbewahren.</span></li>
         </ul>
         <div class="row" style="margin-top:10px"><button class="btn danger" data-act="wipe">Alle Daten aus diesem Fenster entfernen</button></div></div>
     </div>
+    ${yearsCard()}
     <div class="card"><h3>Projekt</h3><div class="sub">Planungsjahr ${S.meta.year} · erstellt ${fmt(String(S.meta.created).slice(0, 10))}${S.meta.source ? ' · ' + S.meta.source : ''}</div>
       <div class="row"><label class="f" style="min-width:280px">Projekttitel<input type="text" data-chg="meta" value="${S.meta.title}" maxlength="120"></label><span class="sp"></span>
         <button class="btn" data-act="load-demo">Demo-Daten erzeugen</button><button class="btn" data-act="new-empty">Leeres Projekt anlegen</button></div></div>`;

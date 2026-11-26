@@ -6,7 +6,7 @@ import { DOC, PRJ, autosaveOn, dirty, markUnsaved, redo, replaceProject, undo, y
 import { closeModal, openModal, safe, toast } from './dialogs.js';
 import { ACT } from './registry.js';
 import { go } from './shell.js';
-import { presentLoad, saveProject } from './project-files.js';
+import { presentLoad, refreshRecent, saveProject } from './project-files.js';
 
 /* ==========================================================================
  * Oberfläche · Desktop-Programm: Menübefehle, Dateien vom Betriebssystem,
@@ -51,5 +51,6 @@ export function initDesktop() {
   document.documentElement.dataset.desktop = '1';
   desktop.onCommand((cmd, arg) => safe(() => command(cmd, arg)));
   safe(offerRecovery);
+  refreshRecent();
   desktop.ready();                       // ab jetzt stellt der Hauptprozess Dateien und Menübefehle zu
 }

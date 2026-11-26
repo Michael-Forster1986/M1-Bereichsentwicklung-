@@ -1,6 +1,6 @@
 import * as Core from '../core/index.js';
 import { $, html, raw, setHTML } from './dom.js';
-import { MON, REPORT_STATUS, ROUTE_STATE, clusterLabel, dayLabel, fmt, fmtS, nf, opts, originOf, pill, sgn, tcls } from './format.js';
+import { MON, REPORT_STATUS, ROUTE_STATE, TSHORT, clusterLabel, dayLabel, fmt, fmtS, nf, opts, originOf, pill, sgn, tcls } from './format.js';
 import { CONF, IX, P, PROG, S, UI, collator, commit, nameOf, pName, pidOf, privacy, sortKey } from './state.js';
 import { closeDrawer, closeModal, confirmDlg, openDrawer, openModal, toast } from './dialogs.js';
 import { ACT, CHG, TIP } from './registry.js';
@@ -60,6 +60,7 @@ function drawerPerson(p) {
     <div class="small ink2">${Core.CLUSTERS[p.cluster]} · Berechtigung ${p.rights}${Object.entries(p.patterns).filter(x => x[1] && x[1] !== '—').map(([k, v]) => ' · ' + k + ': ' + v).join('')}</div>
     ${pr.steps.length ? html`<div><h3>Ausbildungsweg ${p.customRoute ? '(individuell)' : ''}</h3><div class="steps">${pr.steps.map(s => html`
       <div class="step"><span>${s.type}</span><span class="tr"><i class="${tcls(s.type)}" style="width:${s.need ? Math.min(100, s.have / s.need * 100) : 0}%"></i></span><span class="num right">${s.have} / ${s.need} Tage</span></div>`)}</div>
+      ${p.credit ? html`<p class="small muted" style="margin-top:6px">Davon Vorleistung aus Vorjahren: ${pr.steps.filter(s => s.credit).map(s => (TSHORT[s.type] || s.type) + ' ' + s.credit + ' Tage').join(' · ')}</p>` : ''}
       ${rep && ['open', 'blocked', 'partial'].includes(rep.status) ? html`<div class="note ${rep.status === 'partial' ? 'warn' : 'crit'}" style="margin-top:10px"><b>${REPORT_STATUS[rep.status][0]}:</b> ${rep.reason}${rep.remaining ? html`<br>Offen: ${rep.remaining.join(', ')}` : ''}</div>` : ''}</div>`
       : html`<div class="note">${pr.state === 'locked' ? 'Für diese Person werden keine neuen Maßnahmen geplant; in der Kapazität zählt sie weiter mit.' : 'Ohne Clusterzuordnung gibt es keinen Ausbildungsweg. Cluster unten wählen.'}</div>`}
     <div><h3>Jahreskalender ${yr}</h3>
@@ -74,7 +75,7 @@ function drawerPerson(p) {
       <label class="f">Zielstufe${sel('level', [['', 'offen'], ...Core.LEVELS], p.level)}</label>
       <label class="f">Individueller Start<input type="date" data-chg="person" data-pk="${p.alias}" data-f="start" value="${p.start}" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Planungspriorität (1 zuerst)<input type="number" min="1" max="9" data-chg="person" data-pk="${p.alias}" data-f="priority" value="${p.priority}"></label>
-      <label class="f">Abschluss aller Doings<input type="date" data-chg="person" data-pk="${p.alias}" data-f="gate" value="${p.gate}" min="${yr}-01-01" max="${yr}-12-31"></label>
+      <label class="f" data-tip="Darf auch in einem Vorjahr liegen">Abschluss aller Doings<input type="date" data-chg="person" data-pk="${p.alias}" data-f="gate" value="${p.gate}" max="${yr}-12-31"></label>
       <label class="f">Bereich ohne Dienstplan${sel('area', Core.AREAS, p.area)}</label>
       <label class="f">Dienst ohne Dienstplan${sel('shift', Core.SHIFTS, p.shift)}</label>
     </div>
@@ -83,20 +84,23 @@ function drawerPerson(p) {
       <label class="c"><input type="checkbox" data-chg="person" data-pk="${p.alias}" data-f="locked" ${p.locked ? raw('checked') : ''}> Gesperrt – keine neuen Maßnahmen, Cluster nicht änderbar</label>
       ${route && route.includes(Core.LOGBOOK) ? html`<div class="row small"><span class="ink2">Logbook-Tage M1 / M2 / M3</span>${[0, 1, 2].map(j => html`<input type="number" class="w60" min="0" max="260" data-chg="person" data-pk="${p.alias}" data-f="rot${j}" value="${p.rotation ? rot[j] : ''}" placeholder="–" aria-label="Logbook-Tage ${Core.AREAS[j]}">`)}
         ${p.rotation ? html`<button class="btn sm" data-act="person-rot-clear" data-pk="${p.alias}">Rotation entfernen</button>` : html`<span class="muted">leer = alle Tage im eigenen Bereich</span>`}</div>` : ''}
+      ${route && route.length ? html`<div class="row small" data-tip="Tage, die vor diesem Planungsjahr bereits erbracht wurden. Der Planer verteilt nur den Rest. Beim Anlegen eines Folgejahres wird der Wert automatisch übernommen."><span class="ink2">Vorleistung aus Vorjahren (Tage)</span>${route.map(t => html`<label class="c">${TSHORT[t] || t}<input type="number" class="w60" min="0" max="999" data-chg="person" data-pk="${p.alias}" data-f="credit:${t}" value="${Core.creditOf(p, t) || ''}" placeholder="–" aria-label="Vorleistung ${t}"></label>`)}</div>` : ''}
     </div></div>
     <div class="row noprint">${route ? html`<button class="btn sm" data-act="route-person" data-pk="${p.alias}">Individuellen Weg bearbeiten</button>` : ''}<span class="sp"></span><button class="btn sm danger" data-act="person-delete" data-pk="${p.alias}">Person entfernen</button></div>` };
 }
 CHG.person = t => {
   const p = P(t.dataset.pk), f = t.dataset.f; if (!p) return;
   const yr = String(S.meta.year); let v = t.type === 'checkbox' ? t.checked : t.value;
-  if ((f === 'start' || f === 'gate') && v && (!Core.validDate(v) || !v.startsWith(yr))) { render(); return toast('Datum muss im Jahr ' + yr + ' liegen', 'crit'); }
+  if (f === 'start' && v && (!Core.validDate(v) || !v.startsWith(yr))) { render(); return toast('Datum muss im Jahr ' + yr + ' liegen', 'crit'); }
+  if (f === 'gate' && v && (!Core.validDate(v) || v > yr + '-12-31')) { render(); return toast('Datum darf nicht nach dem Jahr ' + yr + ' liegen', 'crit'); }
   if (f === 'cluster' && p.locked) { render(); return toast('Gesperrte Person: Cluster nicht änderbar', 'crit'); }
   commit('Person gespeichert – für neue Terminverteilung „Neu berechnen“', () => {
     if (f.startsWith('rot')) { const r = p.rotation ? p.rotation.slice() : [0, 0, 0]; r[+f.slice(3)] = Core.clamp(Math.round(+v || 0), 0, 260); p.rotation = r; }
+    else if (f.startsWith('credit:')) { const c = Core.normCredit({ ...(p.credit || {}), [f.slice(7)]: +v || 0 }); if (c) p.credit = c; else delete p.credit; }
     else if (f === 'priority') p.priority = Core.clamp(Math.round(+v) || 3, 1, 9);
     else if (f === 'locked') { p.locked = v; if (!v && p.cluster === 'ausgeschlossen') p.cluster = 'offen'; }
     else p[f] = v;
-    if (f === 'cluster') { p.target = ''; p.level = ''; p.confirmed = false; delete p.rotation; delete p.customRoute; delete p.targetAssumed; if (v === 'ausgeschlossen') p.locked = true; }
+    if (f === 'cluster') { p.target = ''; p.level = ''; p.confirmed = false; delete p.rotation; delete p.customRoute; delete p.targetAssumed; delete p.credit; if (v === 'ausgeschlossen') p.locked = true; }
     if (f === 'target') delete p.targetAssumed;
   });
 };

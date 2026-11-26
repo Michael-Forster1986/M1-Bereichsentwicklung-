@@ -167,6 +167,51 @@ test('Ausgaben: Gesamtbericht als PDF und Excel-Arbeitsmappe', async () => {
   assert.ok(bytes.includes(Buffer.from('xl/worksheets/sheet9.xml')), 'neun Tabellenblätter');
 });
 
+test('Mehrjahresplanung: Folgejahr anlegen, wechseln, speichern und wieder laden', async () => {
+  await menu('act', 'year-add');
+  await page.waitForSelector('#modal #yrReopen');
+  assert.match(await page.textContent('#modal h2'), /Folgejahr 2028 anlegen/);
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.textContent('#main h1')) === 'Übersicht 2028', 'Übersicht 2028');
+  assert.equal(await page.inputValue('.yearsel'), '2028');
+  assert.match(await page.textContent('#main'), /Jahresvergleich/);
+  assert.match(await page.textContent('#rail'), /Termine\s*$|Termine\s*0|Termine/m);
+  // 2028 berechnen: begonnene Wege werden fortgesetzt
+  await page.click('#top [data-act="plan"]');
+  await page.selectOption('#planMode', '16');
+  await page.click('#planGo');
+  await page.waitForSelector('#planResult [data-act="m:apply"]', { timeout: 60000 });
+  await page.click('#planResult [data-act="m:apply"]');
+  await menu('go', 'report');
+  await waitFor(async () => /Neu geplant/.test(await page.textContent('#main')), 'Planungsergebnis 2028');
+  // Wechsel über die Kopfzeile und zurück
+  await page.selectOption('.yearsel', '2027');
+  await menu('go', 'overview');
+  await waitFor(async () => (await page.textContent('#main h1')) === 'Übersicht 2027', 'zurück nach 2027');
+  // Speichern und Datei prüfen
+  const two = path.join(TMP, 'Zwei Jahre.m1cockpit');
+  await nextSave(two); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(two), 'Projektdatei mit zwei Jahren');
+  const prj = JSON.parse(fs.readFileSync(two, 'utf8'));
+  assert.deepEqual(Object.keys(prj.years), ['2027', '2028']);
+  assert.equal(prj.active, 2027);
+  assert.ok(prj.years['2028'].people.some(p => p.credit), 'Vorleistungen sind gespeichert');
+  assert.ok(prj.years['2028'].events.length > 0 && prj.years['2028'].events.every(e => e.start.startsWith('2028-')));
+  assert.ok(prj.years['2027'].events.every(e => e.start.startsWith('2027-')));
+  // Rückgängig nimmt das Anlegen des Jahres vollständig zurück – und Wiederholen stellt es wieder her
+  for (let i = 0; i < 3 && (await page.locator('.yearsel option').count()) > 2; i++) await page.click('#top [data-act="undo"]');
+  assert.equal(await page.locator('.yearsel option').count(), 2, 'nur 2027 und „Folgejahr anlegen“');
+  for (let i = 0; i < 3 && (await page.locator('.yearsel option').count()) < 3; i++) await page.click('#top [data-act="redo"]');
+  assert.equal(await page.locator('.yearsel option').count(), 3);
+  // Neu laden: beide Jahre sind da
+  await nextOpen(two); await menu('act', 'load-project');
+  await page.waitForSelector('#modal [data-act="m:ok"]');
+  assert.match(await page.textContent('#modal .body'), /2027, 2028/);
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await title()) === 'Zwei Jahre.m1cockpit – M1 Qualifikationscockpit', 'geladenes Projekt');
+  assert.equal(await page.locator('.yearsel option').count(), 3);
+});
+
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });
 
 test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', async () => {

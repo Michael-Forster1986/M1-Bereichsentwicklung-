@@ -3,6 +3,7 @@ import { html, raw } from '../dom.js';
 import { MONL, clusterLabel, dayLabel, nf, opts, sgn } from '../format.js';
 import { CONF, IX, S, SUM, UI } from '../state.js';
 import { ACT, CHG, INP, VIEWS } from '../registry.js';
+import { yearCompareCard } from './years.js';
 import { go, render } from '../shell.js';
 import { areaKnown, capCells, capLegend, monthsRow } from './shared.js';
 
@@ -70,6 +71,7 @@ VIEWS.overview = {
       <button class="kpi ${SUM.underZero ? 'warn' : ''}" data-act="go" data-id="capacity"><div class="l">Diensttage unter 0-Punkt</div><div class="v">${nf(SUM.underZero)}</div><div class="s">${wz ? 'kleinste Reserve ' + sgn(wz.v) : 'keine Tagesdaten'}</div></button>
       <button class="kpi ${CONF.size ? 'crit' : ''}" data-act="go" data-id="report"><div class="l">Termine mit Konflikt</div><div class="v">${nf(CONF.size)}</div><div class="s">${nf(SUM.trainingDays)} Ausbildungstage geplant</div></button>
     </div>
+    ${yearCompareCard()}
     <div class="gridA" style="margin-bottom:14px">
       <div class="card"><h3>Stand der Ausbildungswege</h3><div class="sub">${nf(SUM.people)} Personen nach Planungsstand</div>
         <div class="segbar" role="img" aria-label="${seg.map(x => x[0] + ' ' + x[1]).join(', ')}">${seg.map(x => html`<span class="${x[3]}" style="flex:${x[1]};background:${x[2]}" data-tip="${x[0]}: ${x[1]} Personen (${nf(x[1] / SUM.people * 100)} %)">${x[1] / SUM.people > 0.045 ? x[1] : ''}</span>`)}</div>

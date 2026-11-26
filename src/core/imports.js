@@ -40,7 +40,7 @@ export function applyPeople(st, chk, mode) {
           merged.cluster = c; info.reclustered++;
           if (!fields.has('target')) merged.target = '';
           if (!fields.has('level')) merged.level = '';
-          merged.confirmed = false; delete merged.rotation; delete merged.customRoute;
+          merged.confirmed = false; delete merged.rotation; delete merged.customRoute; delete merged.credit;
         }
       } else merged[f] = r[f];
     }

@@ -118,11 +118,11 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
   add({ name: 'Personen', columns: [{ header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Org.-Einheit', width: 22 }, { header: 'Berechtigung', width: 13 },
     { header: 'Cluster', width: 10, type: 'text' }, { header: 'Gesperrt', width: 9 }, { header: 'Bereich', width: 8 }, { header: 'Dienst', width: 8 }, { header: 'Zielmuster', width: 14 }, { header: 'Zielstufe', width: 10 },
     { header: 'Priorität', width: 9, type: 'int' }, ...PATTERNS.map(k => ({ header: k, width: 8 })), { header: 'Voraussetzungen bestätigt', width: 14 }, { header: 'Abschluss Doings', width: 13, type: 'date' },
-    { header: 'Individueller Start', width: 13, type: 'date' }, { header: 'Planungsstand', width: 20 }, { header: 'Geplante Tage', width: 10, type: 'int' }, { header: 'Solltage', width: 9, type: 'int' }, { header: 'Letzter Termin', width: 13, type: 'date' }],
+    { header: 'Individueller Start', width: 13, type: 'date' }, { header: 'Planungsstand', width: 20 }, { header: 'Geplante Tage', width: 10, type: 'int' }, { header: 'davon Vorleistung aus Vorjahren', width: 14, type: 'int' }, { header: 'Solltage', width: 9, type: 'int' }, { header: 'Letzter Termin', width: 13, type: 'date' }],
   rows: st.people.map(p => {
     const pr = routeProgress(st, ix, p), have = pr.steps.reduce((s, x) => s + x.have, 0), need = pr.steps.reduce((s, x) => s + x.need, 0);
     return [idOf(p), nameOf(p), privacy ? '' : p.org, p.rights, p.cluster, p.locked ? 'ja' : '', p.area, p.shift, p.target, p.level, p.priority, ...PATTERNS.map(k => p.patterns[k]), p.confirmed ? 'ja' : '', p.gate, p.start,
-      { v: label(ROUTE_LABELS, pr.state), fill: { complete: 'good', partial: 'warn', none: 'crit' }[pr.state] || '' }, pr.steps.length ? have : '', pr.steps.length ? need : '', pr.end || ''];
+      { v: label(ROUTE_LABELS, pr.state), fill: { complete: 'good', partial: 'warn', none: 'crit' }[pr.state] || '' }, pr.steps.length ? have : '', pr.steps.reduce((s, x) => s + (x.credit || 0), 0) || '', pr.steps.length ? need : '', pr.end || ''];
   }) });
 
   // Termine

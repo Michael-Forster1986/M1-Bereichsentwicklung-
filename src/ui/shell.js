@@ -6,6 +6,7 @@ import { toast } from './dialogs.js';
 import { ACT, VIEWS } from './registry.js';
 import { hideTip } from './tooltip.js';
 import { renderDrawer } from './drawers.js';
+import { yearSelect } from './views/years.js';
 
 // Während des Neuzeichnens ausgelöste Änderungen (Feld verliert beim Ersetzen den Fokus) werden danach ausgeführt.
 export let rendering = false;
@@ -51,6 +52,7 @@ export function renderTop() {
   const dc = DATA_CLASS[S.meta.dataClass] || DATA_CLASS.real, cap = S.settings.cap;
   setHTML($('#top'), html`
     <div class="brand"><b>M1 Qualifikationscockpit</b><span>${S.meta.title}</span></div>
+    ${yearSelect()}
     <span class="pill" data-tip="${S.meta.dataClass === 'demo' ? 'Alle Personen, Dienstpläne und Abwesenheiten sind frei erfunden.' : S.meta.dataClass === 'real' ? 'Enthält Personendaten. Datei und Sicherungen nur im berechtigten Umfeld speichern.' : S.meta.dataClass === 'pseudo' ? 'Namen und Personalnummern sind durch Pseudonyme ersetzt.' : 'Noch keine Personen geladen.'}">${dc[0]}</span>
     <span class="pill hide-s" data-tip="${cap ? 'Kapazität wird verbindlich geprüft: fehlende Tagesdaten blockieren die Planung.' : 'Szenariomodus: Termine werden ohne verbindliche Kapazitätsprüfung verteilt.'}">${cap ? 'Kapazitätsmodus' : 'Szenariomodus'}</span>
     <span class="sp"></span>
