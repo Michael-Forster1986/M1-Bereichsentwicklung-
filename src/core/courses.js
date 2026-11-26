@@ -3,6 +3,7 @@ import { isCourse, measureOf, shiftsOf } from './measures.js';
 import { num, uid } from './util.js';
 import { validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
+import { FRAME_TYPE, rulesOf } from './rules.js';
 import { assign, buildIndex, capInfo, eventK } from './indexing.js';
 
 // ---------- Lehrgangsplanung (zusammenhängende Kurse) -------------------
@@ -160,12 +161,12 @@ const hasCoursePlace = (p, t, evs, need) => evs.some(e => e.type === t && (e.cou
  * placed = haben einen Platz · open = brauchen noch einen. Cluster 3 / 4B brauchen den Praxis-Lehrgang als Voraussetzung.
  */
 export function courseDemand(st, ix) {
-  const groups = new Map();
+  const groups = new Map(), frame = rulesOf(st).frame;
   for (const p of st.people) {
     if (isLocked(p) || p.cluster === 'offen') continue;
     const route = routeOf(st, p) || [], cfg = cfgOf(st, p) || {}, evs = ix.evByPerson.get(p.pk) || [];
     const need = new Map(route.filter(t => isCourse(st, t)).map(t => [t, false]));
-    if (['3', '4B'].includes(p.cluster) && !p.gate && !need.has('Praxis')) need.set('Praxis', true);
+    if (frame.includes(p.cluster) && !p.gate && !need.has(FRAME_TYPE)) need.set(FRAME_TYPE, true);
     for (const [t, prereq] of need) {
       const target = courseAudience(st, p, t), key = t + '|' + target;
       let g = groups.get(key);

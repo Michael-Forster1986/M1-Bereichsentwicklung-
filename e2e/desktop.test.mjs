@@ -392,6 +392,136 @@ test('Ausbildungswege: Reihenfolge per Ziehen, eigener Schritt und zulässige Di
   assert.ok(await page.locator('.pchip:has-text("HF")').count(), 'eigener Schritt lässt sich in den Jahresplan ziehen');
 });
 
+test('Ausbildungswege: feste Schritte ändern, Regeln einstellen, Kacheln ohne Überlappung', async () => {
+  await menu('go', 'routes'); await page.waitForSelector('#rulesCard');
+  // Kacheln: keine Beschriftung ragt in ein Eingabefeld oder über den Kachelrand – auch nicht mit deutlich breiterer Schrift
+  const overlap = () => page.evaluate(() => {
+    const bad = [];
+    for (const l of document.querySelectorAll('.rt-res label, .rt-days')) {
+      const s = l.querySelector('span').getBoundingClientRect(), i = l.querySelector('input').getBoundingClientRect(), card = l.closest('.rt-step').getBoundingClientRect();
+      const hit = !(s.right <= i.left + 0.5 || s.left >= i.right - 0.5 || s.bottom <= i.top + 0.5 || s.top >= i.bottom - 0.5);
+      if (hit || i.right > card.right + 0.5 || s.right > card.right + 0.5) bad.push(l.textContent.trim());
+    }
+    return bad;
+  });
+  assert.ok(await page.locator('.rt-res label').count() >= 8);
+  assert.deepEqual(await overlap(), []);
+  const wide = await page.addStyleTag({ content: '.rt-step, .rt-step *{letter-spacing:.09em !important}' });
+  assert.deepEqual(await overlap(), [], 'auch mit breiterer Schrift');
+  await wide.evaluate(n => n.remove());
+
+  // feste Maßnahme: Bezeichnung, Kürzel und Farbe ändern – der Name bleibt der Schlüssel
+  await page.click('#msCard [data-act="measure-edit"][data-t="Practical Logbook"]'); await page.waitForSelector('#msName');
+  assert.equal(await page.inputValue('#msName'), 'Practical Logbook');
+  assert.equal(await page.isDisabled('input[name=msKind][value="1"]'), true, 'Art gesperrt, weil es bereits Termine gibt');
+  await page.fill('#msName', 'FitCheck'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /gibt es bereits als feste Maßnahme/.test(await toastText()), 'vergebene Bezeichnung wird abgelehnt');
+  await page.fill('#msName', 'Logbuch Praxis'); await page.fill('#msShort', 'LB'); await page.click('.ms-colors label:has(input[value="4"]) i');
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('.rt-step[data-step="Practical Logbook"] .rt-sh b').innerText()) === 'Logbuch Praxis', 'neue Bezeichnung auf der Schrittkarte');
+  assert.match(await page.locator('#msCard tr:has-text("Logbuch Praxis")').innerText(), /angepasst/);
+  assert.equal(await page.locator('.rt-step[data-step="Practical Logbook"] .rt-top.t-x4').count(), 1, 'neue Farbe');
+  // Vorbereitung und ICA: die Art steht fest
+  await page.click('#msCard [data-act="measure-edit"][data-t="ICA"]'); await page.waitForSelector('#msName');
+  assert.equal(await page.isDisabled('input[name=msKind][value="1"]'), true);
+  assert.match(await page.locator('#modal').innerText(), /Die Art steht fest/);
+  await page.click('#modal [data-act="modal-close"]');
+
+  // Regeln: Voraussetzung nur noch für Cluster 4B, A320-Regel aus, Weg für die Zielstufe TEC um die ICA erweitert
+  await page.click('#rulesCard [data-chg="rule-frame"][data-k="3"]');
+  await waitFor(async () => /Voraussetzung für Cluster 4B/.test(await toastText()), 'Regel zur Voraussetzung geändert');
+  await page.click('#rulesCard [data-chg="rule"][data-k="deferA320"]');
+  await waitFor(() => page.evaluate(() => /gilt nicht/.test(document.querySelector('#rulesCard [data-k="deferA320"]').closest('label').innerText)), 'A320-Regel abgeschaltet');
+  await page.click('#rulesCard [data-act="rule-tec-edit"]'); await page.waitForSelector('#tecRoute');
+  const tec = () => page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-scope="tec"] .rt-step')].map(x => x.dataset.step));
+  assert.deepEqual(await tec(), ['Theorie', 'Praxis']);
+  await page.click('[data-act="route-add"][data-scope="tec"][data-t="ICA"]');
+  await waitFor(async () => (await tec()).length === 3, 'ICA im Weg für die Zielstufe TEC');
+  await page.click('.rt-flow[data-scope="tec"] [data-act="route-move"][data-t="ICA"][data-dir="-1"]');
+  await waitFor(async () => (await tec())[1] === 'ICA', 'ICA vorgezogen');
+  assert.deepEqual(await tec(), ['Theorie', 'ICA', 'Praxis']);
+  assert.equal(await page.locator('#ruleTec').innerText(), 'Theorie → ICA → Praxis');
+  assert.equal(await page.locator('#rulesCard .pill:has-text("geändert")').count(), 3);
+  // der Clusterweg von Cluster 5 bleibt davon unberührt
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-keep="rtflow"] .rt-step')].map(x => x.dataset.step)), ['Practical Logbook']);
+
+  // alles steht in der Projektdatei – gespeichert wird nur die Abweichung von der Vorgabe
+  const file = path.join(TMP, 'Regeln.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit Regeln');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active];
+  assert.deepEqual(st.settings.rules, { frame: ['4B'], tecRoute: ['Theorie', 'ICA', 'Praxis'], deferA320: false });
+  assert.deepEqual(st.measureEdits, { 'Practical Logbook': { label: 'Logbuch Praxis', short: 'LB', color: 4 } });
+  assert.ok(st.events.some(e => e.type === 'Practical Logbook') && !st.events.some(e => e.type === 'Logbuch Praxis'), 'Termine behalten den Namen der Maßnahme');
+  // zurück auf die Vorgabe
+  await page.click('#rulesCard [data-act="rules-reset"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('#rulesCard .pill:has-text("geändert")').count()) === 0, 'Regeln wieder auf Vorgabe');
+  assert.deepEqual(await tec(), ['Theorie', 'Praxis']);
+});
+
+test('Ausbildungswege: ein geänderter individueller Weg kommt per Knopf in den Jahresplan', async () => {
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+  await page.click('.rt-card >> nth=1');                                     // Cluster 2
+  const snap = async name => { const f = path.join(TMP, name); await nextSave(f); await menu('act', 'save-project-as'); await waitFor(() => fs.existsSync(f), name); const prj = JSON.parse(fs.readFileSync(f, 'utf8')); return prj.years[prj.active]; };
+  const sig = e => [e.id, e.type, e.start, e.end].join('|');
+  const before = await snap('Vor-Uebernahme.m1cockpit');
+  // eine Person wählen und ihren Weg ändern: FitCheck 4 Tage – damit entsteht ein individueller Weg
+  const alias = await page.evaluate(() => document.querySelector('[data-chg="route-person"] option:nth-child(2)').value);
+  await page.selectOption('[data-chg="route-person"]', alias);
+  await waitFor(async () => /Individueller Weg/.test(await page.locator('#main').innerText()), 'Person gewählt');
+  assert.equal(await page.locator('#rtPlan.dirty').count(), 0, 'ohne Änderung kein Hinweis');
+  await page.fill('.rt-flow[data-keep="rtflow"] .rt-step[data-step="FitCheck"] input[data-f="days"]', '4'); await page.keyboard.press('Tab');
+  await page.waitForSelector('#rtPlan.dirty');
+  assert.match(await page.locator('#rtPlan').innerText(), /noch nicht übernommen/);
+  // der Jahresplan ist bis hierher unverändert
+  const between = await snap('Zwischen-Uebernahme.m1cockpit'), person = between.people.find(p => p.alias === alias);
+  assert.equal(person.customRoute.config.FitCheck.days, 4);
+  assert.deepEqual(between.events.map(sig).sort(), before.events.map(sig).sort());
+  // Übernahme: nur diese Person wird neu verteilt
+  await page.click('#rtPlan [data-act="route-apply"]');
+  await waitFor(async () => /in den Jahresplan übernommen|planbar/.test(await toastText()), 'Meldung zur Übernahme');
+  await waitFor(async () => (await page.locator('#rtPlan.dirty').count()) === 0, 'Hinweis verschwindet');
+  const after = await snap('Nach-Uebernahme.m1cockpit'), r = after.report.find(x => x.pk === person.pk);
+  assert.deepEqual(after.events.filter(e => e.pk !== person.pk).map(sig).sort(), before.events.filter(e => e.pk !== person.pk).map(sig).sort(), 'alle anderen Termine bleiben unverändert');
+  assert.ok(r && ['planned', 'kept', 'partial', 'blocked'].includes(r.status), 'Berichtszeile der Person');
+  if (r.status === 'planned') {
+    assert.equal(after.events.filter(e => e.pk === person.pk && e.type === 'FitCheck').reduce((s, e) => s + e.dates.length, 0), 4, 'FitCheck mit vier Tagen im Jahresplan');
+    const old = new Set(before.events.filter(e => e.pk === person.pk && e.auto).map(e => e.id));
+    assert.ok(after.events.filter(e => e.pk === person.pk && e.auto).every(e => !old.has(e.id)), 'berechnete Termine der Person neu verteilt');
+  }
+  // die Meldung führt in den Jahresplan
+  await page.click('#toasts .toast:has-text("Jahresplan") button');
+  await page.waitForSelector('#gantt .g-row');
+  await page.keyboard.press('Control+z');                                     // Rückgängig nimmt die Übernahme zurück
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+});
+
+test('Jahresplan: Monatsansicht zeigt die Zeilen, hineinzoomen bis auf einzelne Tage', async () => {
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  assert.match(await page.locator('#main').innerText(), /Logbuch Praxis/, 'geänderte Bezeichnung in der Legende');
+  const rowVisible = () => page.evaluate(() => {
+    const lab = document.querySelector('.g-row .g-lab'); lab.scrollIntoView({ block: 'center' });
+    const r = lab.getBoundingClientRect(), el = document.elementFromPoint(r.left + 20, r.top + r.height / 2);
+    return r.width > 50 && r.height > 10 && !!el && !!el.closest('.g-lab') && lab.textContent.trim().length > 0;
+  });
+  assert.equal(await rowVisible(), true, 'Zeilen in der Jahresansicht');
+  assert.equal(await page.locator('.g-days').count(), 0, 'in der Jahresansicht keine Tagesleiste');
+  for (const [z, name] of [['12', 'Monat'], ['26', '2 Wochen']]) {
+    await page.click('[data-act="gantt-zoom"][data-z="' + z + '"]');
+    await waitFor(() => page.evaluate(() => document.querySelectorAll('.g-days span').length === 365), 'Tagesleiste in der Ansicht ' + name);
+    assert.equal(await rowVisible(), true, 'Zeilen in der Ansicht ' + name);
+    // je nach Fensterbreite steht der Wochentag dabei; in der Ansicht „2 Wochen“ immer
+    assert.match(await page.locator('.g-days span >> nth=3').innerText(), z === '26' ? /^(Mo|Di|Mi|Do|Fr|Sa|So) \d+\.$/ : /^((Mo|Di|Mi|Do|Fr|Sa|So) )?\d+\.$/, 'Tag (und Wochentag)');
+  }
+  // Strg + Mausrad zoomt stufenweise heraus
+  const box = await page.locator('#gantt').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height, 200) / 2);
+  await page.keyboard.down('Control'); await page.mouse.wheel(0, 120); await page.keyboard.up('Control');
+  await waitFor(() => page.evaluate(() => (document.querySelector('[data-act="gantt-zoom"].on, [data-act="gantt-zoom"][aria-pressed="true"]') || { dataset: {} }).dataset.z === '12'), 'Strg + Mausrad: zurück zur Monatsansicht');
+  await page.click('[data-act="gantt-zoom"][data-z="1"]');
+  await waitFor(async () => (await page.locator('.g-days').count()) === 0, 'zurück in der Jahresansicht');
+});
+
 test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge und Ziehen', async () => {
   await menu('go', 'year'); await page.waitForSelector('.g-row');
   await page.click('.g-row >> nth=0 >> .g-lab'); await page.waitForSelector('#pcal');

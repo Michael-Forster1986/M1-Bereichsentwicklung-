@@ -1,3 +1,4 @@
+import { rulesOf } from './rules.js';
 import { AREAS, CLUSTERS, LEVELS, PATTERNS, SHIFTS, TARGETS, TYPES } from './constants.js';
 import { clamp, fin, num, truthy } from './util.js';
 import { normDate } from './dates.js';
@@ -68,5 +69,6 @@ export function assignAliases(people, rnd = Math.random) {
   const width = Math.max(3, String(next + todo.length).length);
   for (const p of todo) { p.alias = 'P-' + String(next++).padStart(width, '0'); }
 }
-export const routeOf = (st, p) => p.customRoute?.steps || (p.cluster === '5' && p.level === 'TEC' ? ['Theorie', 'Praxis'] : st.routes[p.cluster] || null);
+/** Der Weg einer Person: ihr individueller, sonst für Cluster 5 mit Zielstufe TEC der TEC-Weg aus den Regeln, sonst der ihres Clusters. */
+export const routeOf = (st, p) => p.customRoute?.steps || (p.cluster === '5' && p.level === 'TEC' ? rulesOf(st).tecRoute : st.routes[p.cluster] || null);
 export const cfgOf = (st, p) => p.customRoute?.config || st.config[p.cluster] || null;

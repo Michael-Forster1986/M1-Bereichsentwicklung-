@@ -10,7 +10,7 @@ export { defaultConfig, defaultLimits, defaultSettings, emptyState, newProjectSt
 export { isLocked, parseCluster, normShift, normPerson, normCredit, creditOf, assignAliases, routeOf, cfgOf } from './people.js';
 export { decodeRoster, encodeRoster, rosterCode, setRosterDays, fillRoster, fillRosterWeekly, copyRoster, clearRoster } from './roster.js';
 export { buildIndex, assign, capInfo, eventK } from './indexing.js';
-export { runPlan, scorePlan, planVariants, optimizePlan, betterScore } from './planner.js';
+export { runPlan, scorePlan, planVariants, optimizePlan, replanPeople, betterScore } from './planner.js';
 export { findConflicts } from './conflicts.js';
 export { routeProgress, summarize } from './summary.js';
 export { courseAssess, courseSearch, pickSlots, courseEvents, courseDayList, courseMembers, courseKey, courseTargetOf, courseAudience, courseDemand, courseWindow, courseCandidates, assessCourse, memberEvent, joinCourse, moveCourse, removeCourse, proposeCourses } from './courses.js';
@@ -26,4 +26,5 @@ export { demoState } from './demo.js';
 export { readXlsx, xlsxPeopleTable } from './xlsx-read.js';
 export { writeXlsx, zip, excelDate, sheetNames } from './xlsx-write.js';
 export { REPORT_LABELS, ROUTE_LABELS, DATA_CLASS_LABELS, MONTHS, NOTICE, originOf, monthlyFigures, clusterFigures, yearFigures, capStatus, buildWorkbook } from './report.js';
-export { MEASURE_COLORS, MAX_MEASURES, defaultShifts, measureNameIssue, normMeasures, normShifts, typesOf, measureOf, isCourse, courseTypesOf, shiftsOf, shiftOk, shiftText, shiftIssue, setShifts, measureUsage, addMeasure, editMeasure, removeMeasure, moveStep, insertStep } from './measures.js';
+export { MEASURE_COLORS, MAX_MEASURES, defaultShifts, measureNameIssue, isBuiltin, kindFixed, editOf, labelOf, normMeasureEdits, editBuiltin, resetBuiltin, normMeasures, normShifts, typesOf, measureOf, isCourse, courseTypesOf, shiftsOf, shiftOk, shiftText, shiftIssue, setShifts, measureUsage, addMeasure, editMeasure, removeMeasure, moveStep, insertStep } from './measures.js';
+export { DEFAULT_RULES, FRAME_TYPE, RULE_SWITCHES, rulesOf, normRules, rulesChanged, setRules, resetRules } from './rules.js';

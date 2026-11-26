@@ -126,13 +126,14 @@ VIEWS.help = {
           <li>Jede Maßnahme liegt nur in den Diensten, die für sie zugelassen sind. Vorgabe: Logbook in jedem Dienst, alles andere nur im Frühdienst – einstellbar unter ${go('routes', 'Ausbildungswege')}.</li>
           <li>Die Schritte eines Wegs werden in der dort festgelegten Reihenfolge geplant.</li>
           <li>Lehrgänge: der Planer vergibt freie Plätze in den vorhandenen Lehrgängen. Gibt es keinen passenden Termin, bleibt der Schritt offen und der Bericht nennt den Grund.</li>
-          <li>Die ICA liegt nach allen Kursen und nach dem Abschluss aller Doings; ein Tag Vorbereitung davor bindet nur Prüfer oder TEC.</li>
+          <li>Die ICA liegt nach allen Kursen und nach dem Abschluss aller Doings; ein Tag Vorbereitung davor bindet nur Prüfer oder TEC. Der Vorbereitungstag ist eine Regel und lässt sich unter ${go('routes', 'Ausbildungswege')} abschalten.</li>
           <li>Planungspriorität 1 kommt zuerst. Innerhalb gleicher Priorität vergleicht das Programm viele Reihenfolgen und nimmt die beste.</li>
           <li>Mit „0-Punkt bevorzugen“ plant es zuerst nur auf Tagen ab der Sollbesetzung und geht erst bei Bedarf bis zum Minimum.</li></ul>
         <p>Das Ergebnis erscheint als Vorher/Nachher-Vergleich. Was nicht planbar war, steht mit Begründung im ${go('report', 'Bericht')}.</p></section>
 
       <section class="card" id="h-ziehen"><h2>6 · Jahresplan: Ziehen und Ablegen</h2>
         <p>Im Jahresplan hat jede Person eine Zeile, jede Maßnahme einen Balken. Über dem Plan liegt die Leiste <b>„Ziehen und Ablegen“</b>.</p>
+        <p><b>Zeitraum wählen:</b> Jahr, Halbjahr, Quartal, Monat oder 2 Wochen. Ab der Ansicht „Monat“ steht über dem Plan jeder einzelne Tag mit Wochentag und Datum. ${kbd('Strg')} und Mausrad zoomt stufenweise hinein und heraus; die Stelle unter dem Mauszeiger bleibt dabei stehen.</p>
         <div class="h-grid">
           <div class="h-tile"><b>Neues Element</b><p>Logbook, FitCheck oder ICA aus der Leiste auf die Zeile einer Person ziehen. Dauer und Betreuung kommen aus ihrem Ausbildungsweg.</p></div>
           <div class="h-tile"><b>Balken verschieben</b><p>Einen vorhandenen Balken mit gedrückter Maustaste nach links oder rechts ziehen. Er wird dabei fixiert.</p></div>
@@ -159,20 +160,24 @@ VIEWS.help = {
       <section class="card" id="h-wege"><h2>8 · Cluster und Ausbildungswege</h2>
         <p>Jede Person gehört zu einem Cluster. Der Cluster bestimmt den Ausbildungsweg: eine Folge von Schritten mit Dauer und dem, was der Produktion an einem solchen Tag fehlt.</p>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Cluster</th><th>Bedeutung</th><th>Weg in der Vorgabe</th></tr></thead><tbody>
-          ${Core.ROUTE_CLUSTERS.map(k => html`<tr><td><b>${k}</b></td><td>${Core.CLUSTERS[k]}</td><td>${Core.DEFAULT_ROUTES[k].map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}${k === '5' ? html`<br><span class="muted">Zielstufe TEC:</span> ${sw('Theorie')} Theorie → ${sw('Praxis')} Praxis` : ''}${['3', '4B'].includes(k) ? html`<br><span class="muted">Voraussetzung: Praxis-Lehrgang</span>` : ''}</td></tr>`)}
+          ${Core.ROUTE_CLUSTERS.map(k => html`<tr><td><b>${k}</b></td><td>${Core.CLUSTERS[k]}</td><td>${Core.DEFAULT_ROUTES[k].map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}${k === '5' ? html`<br><span class="muted">Zielstufe TEC:</span> ${Core.DEFAULT_RULES.tecRoute.map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}` : ''}${Core.DEFAULT_RULES.frame.includes(k) ? html`<br><span class="muted">Voraussetzung: Praxis-Lehrgang</span>` : ''}</td></tr>`)}
           <tr><td><b>offen</b></td><td>${Core.CLUSTERS.offen}</td><td class="muted">wird nicht geplant, zählt aber in der Kapazität</td></tr>
           <tr><td><b>ausgeschlossen</b></td><td>${Core.CLUSTERS.ausgeschlossen}</td><td class="muted">keine neuen Maßnahmen</td></tr></tbody></table></div>
         <ul class="h-list" style="margin-top:10px"><li>Cluster, Zielmuster und Zielstufe ändern Sie unter ${go('people', 'Personen & Cluster')} – oder Sie spielen eine Liste ein, die nur Personalnummer und Cluster enthält.</li>
           <li>Dauer und Verlust je Schritt stellen Sie unter ${go('routes', 'Ausbildungswege')} ein: für den ganzen Cluster oder abweichend für eine einzelne Person.</li>
           <li><b>Vorleistung:</b> Hat jemand einen Teil schon erbracht, tragen Sie die Tage in der Seitenleiste der Person ein. Der Planer verteilt dann nur den Rest.</li>
-          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul>
-        <h3>Reihenfolge, eigene Schritte und Dienste</h3>
+          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen in der Vorgabe den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul>
+        <h3>Reihenfolge, Schritte, Dienste und Regeln</h3>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Was</th><th>Wie</th></tr></thead><tbody>
           <tr><td><b>Reihenfolge ändern</b></td><td>Unter ${go('routes', 'Ausbildungswege')} eine Schrittkarte am Kopf greifen und an die neue Stelle ziehen – oder die Pfeile ◀ ▶ auf der Karte nutzen. Der Planer hält die Reihenfolge ein.</td></tr>
           <tr><td><b>Eigenen Schritt anlegen</b></td><td>„Neuen Schritt anlegen“: Bezeichnung, Kürzel, Farbe, Art (einzeln im Dienst oder Lehrgang als Block), zulässige Dienste, Dauer und Verlust. Der Schritt steht danach allen Clustern zur Auswahl.</td></tr>
           <tr><td><b>Dienste je Maßnahme</b></td><td>In der Tabelle „Schritte und Dienste“ je Maßnahme ankreuzen, ob sie im Früh-, Spät- oder Nachtdienst stattfinden darf. Mindestens ein Dienst bleibt immer zugelassen.</td></tr>
-          <tr><td><b>Schritt entfernen</b></td><td>Eigene Schritte lassen sich entfernen, solange es keine Termine oder Lehrgänge dazu gibt.</td></tr></tbody></table></div>
-        <div class="note">Nach jeder Änderung an Reihenfolge, Schritten oder Diensten verteilt erst „Neu berechnen“ die berechneten Termine neu. Fixierte Termine bleiben stehen; liegen sie außerhalb der zugelassenen Dienste, steht das als Konflikt im Bericht.</div></section>
+          <tr><td><b>In den Jahresplan übernehmen</b></td><td>Ein geänderter Weg steht erst nach der Übernahme im Jahresplan. Über dem Ablauf zeigt eine Zeile, was vom Weg im Jahresplan steht; nach einer Änderung ist sie gelb. <b>„In den Jahresplan übernehmen“</b> verteilt nur die berechneten Termine der gewählten Person – oder der Personen des gewählten Clusters – neu. Fixierte Termine und alle anderen Personen bleiben unverändert. ${kbd('Strg', 'Z')} nimmt die Übernahme zurück.</td></tr>
+          <tr><td><b>Schritt ändern</b></td><td>„Ändern“ in der Tabelle „Schritte und Dienste“ – auch bei den vorgegebenen Schritten (Theorie, Praxis, Logbook, FitCheck …): Bezeichnung, Kürzel, Farbe, zulässige Dienste und, solange es noch keine Termine gibt, die Art. „Auf Vorgabe zurücksetzen“ stellt den Schritt wieder her. Bei Vorbereitung und ICA steht die Art fest.</td></tr>
+          <tr><td><b>Schritt entfernen</b></td><td>Eigene Schritte lassen sich entfernen, solange es keine Termine oder Lehrgänge dazu gibt.</td></tr>
+          <tr><td><b>Regeln der Planung</b></td><td>In der Karte „Regeln der Planung“: für welche Cluster der Praxis-Lehrgang Voraussetzung ist, ob A320 zurückgestellt wird, ob der Kombikurs nur für die Zielstufe TEC gilt und ob vor der ICA automatisch ein Vorbereitungstag liegt. „Regeln auf Vorgabe setzen“ stellt alles wieder her.</td></tr>
+          <tr><td><b>Weg für die Zielstufe TEC</b></td><td>Cluster 5 anklicken: Unter dem Weg des Clusters steht der Weg für Personen mit Zielstufe TEC. Er lässt sich wie jeder Weg ändern – Schritte hinzufügen, entfernen, verschieben.</td></tr></tbody></table></div>
+        <div class="note">Änderungen an einem einzelnen Weg übernehmen Sie mit „In den Jahresplan übernehmen“. Nach Änderungen an Schritten, Diensten oder Regeln – sie betreffen alle Wege – verteilt „Neu berechnen“ die berechneten Termine neu. Fixierte Termine bleiben stehen; liegen sie außerhalb der zugelassenen Dienste, steht das als Konflikt im Bericht.</div></section>
 
       <section class="card" id="h-jahre"><h2>9 · Mehrere Planungsjahre</h2>
         <p>Ein Projekt kann mehrere Planungsjahre enthalten; gewechselt wird in der Kopfzeile (aktuell ${y}). <b>„Folgejahr anlegen“</b> übernimmt Personen, Ausbildungswege, Grenzwerte und Einstellungen.</p>

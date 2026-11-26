@@ -86,6 +86,7 @@ export function rolloverYear(prev, opt = {}) {
     assumptions: prev.meta.assumptions.filter(a => !a.startsWith('Dienstplan aus ')).slice(0, 29) });
   next.config = clone(prev.config); next.routes = clone(prev.routes); next.limits = clone(prev.limits);
   next.measures = clone(prev.measures || []);                       // eigene Schritte gehören zum Weg und ziehen mit um
+  next.measureEdits = clone(prev.measureEdits || {});
   next.settings = { ...clone(prev.settings), start: firstMonday(year) };
   next.school = [];
   if (o.holidays) { next.holidays = holidaysBavaria(year).map(h => h.date); info.holidays = next.holidays.length; }

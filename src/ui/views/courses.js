@@ -1,7 +1,7 @@
 import * as Core from '../../core/index.js';
 import { csvDownload, nextFrame, pickFile, templateDownload } from '../files.js';
 import { $, html, raw } from '../dom.js';
-import { TSHORT, dayLabel, fmt, fmtS, nf, opts, pill, sgn, tcls } from '../format.js';
+import { TSHORT, dayLabel, fmt, fmtS, nf, opts, pill, sgn, tcls, tname, typeOpts } from '../format.js';
 import { CONF, IX, P, S, UI, collator, commit, nameOf, pName, privacy, sortKey } from '../state.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, TIP, VIEWS } from '../registry.js';
@@ -33,7 +33,7 @@ function demandCard(demand) {
   if (!demand.length) return html`<div class="card" style="margin-bottom:14px"><h3>1 · Bedarf</h3><div class="note">Derzeit verlangt kein Ausbildungsweg einen Lehrgang. Lehrgänge gehören zum Weg „Cluster 5 · Zielstufe TEC“ (Theorie, dann Praxis); Cluster 3 und 4B brauchen den Praxis-Lehrgang als Voraussetzung. Die Wege stellen Sie unter „Ausbildungswege“ ein.</div></div>`;
   return html`<div class="card" style="margin-bottom:14px"><h3>1 · Bedarf</h3><div class="sub">Wer laut Ausbildungsweg welchen Lehrgang braucht – und wer schon einen Platz hat</div>
     <div class="demand">${demand.map(g => { const pct = g.all.length ? g.placed.length / g.all.length * 100 : 0; return html`
-      <div class="dm ${g.open.length ? '' : 'done'}"><div class="dm-h"><i class="sw ${tcls(g.type)}"></i><b>${g.type}</b>${g.target ? html`<span class="pill info">${g.target}</span>` : ''}<span class="sp"></span><span class="muted small">${g.days ? g.days + ' Tage' : 'Dauer offen'}</span></div>
+      <div class="dm ${g.open.length ? '' : 'done'}"><div class="dm-h"><i class="sw ${tcls(g.type)}"></i><b>${tname(g.type)}</b>${g.target ? html`<span class="pill info">${g.target}</span>` : ''}<span class="sp"></span><span class="muted small">${g.days ? g.days + ' Tage' : 'Dauer offen'}</span></div>
         <div class="dm-n"><b>${nf(g.open.length)}</b><span>${g.open.length === 1 ? 'Person braucht' : 'Personen brauchen'} noch einen Platz</span></div>
         <div class="dm-bar" role="img" aria-label="${g.placed.length} von ${g.all.length} haben einen Platz"><i style="width:${pct}%"></i></div>
         <div class="small ink2">${nf(g.placed.length)} von ${nf(g.all.length)} haben einen Platz${g.prereq ? ' · Voraussetzung für Cluster 3 / 4B' : ''}</div>
@@ -65,7 +65,7 @@ function timeline(sel) {
 TIP.course = t => {
   const c = courseOf(t.dataset.id); if (!c) return null;
   const m = Core.courseMembers(S, c.id), days = Core.courseDayList(IX, c);
-  return html`<b>${c.title}</b> <span class="k">${c.type}${c.target ? ' · ' + c.target : ''}</span><br>${fmt(c.start)} – ${fmt(c.end)} · ${days.length} Lehrgangstage<br>${m.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen belegt' : ' Teilnehmer'}${c.synthetic ? html`<br><span class="k">Szenario (simuliert)</span>` : ''}`;
+  return html`<b>${c.title}</b> <span class="k">${tname(c.type)}${c.target ? ' · ' + c.target : ''}</span><br>${fmt(c.start)} – ${fmt(c.end)} · ${days.length} Lehrgangstage<br>${m.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen belegt' : ' Teilnehmer'}${c.synthetic ? html`<br><span class="k">Szenario (simuliert)</span>` : ''}`;
 };
 
 // ---------- Vorschläge ------------------------------------------------------------------
@@ -96,7 +96,7 @@ function detail(c) {
       <button class="btn sm danger" data-act="crs-delete" data-id="${c.id}">Lehrgang löschen</button><button class="btn sm" data-act="crs-select" data-id="">Schließen</button></div>
     <div class="form" style="margin:10px 0 12px;grid-template-columns:minmax(180px,2fr) repeat(5,minmax(110px,1fr))">
       <label class="f">Bezeichnung<input type="text" maxlength="80" value="${c.title}" data-chg="crs" data-f="title"></label>
-      <label class="f">Art<select data-chg="crs" data-f="type">${opts(Core.courseTypesOf(S), c.type)}</select></label>
+      <label class="f">Art<select data-chg="crs" data-f="type">${opts(typeOpts(Core.courseTypesOf(S)), c.type)}</select></label>
       <label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select data-chg="crs" data-f="target">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], c.target)}</select></label>
       <label class="f">Beginn<input type="date" value="${c.start}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="start"></label>
       <label class="f">Ende<input type="date" value="${c.end}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="end"></label>
@@ -173,7 +173,7 @@ ACT['crs-new'] = t => {
   openModal({ title: 'Lehrgang anlegen', body: html`
     <p class="ink2">Ein Lehrgang ist ein fester Zeitraum mit Plätzen. Teilnehmer tragen Sie danach ein – einzeln oder als beste Besetzung.</p>
     <div class="form"><label class="f" style="grid-column:1/-1">Bezeichnung<input type="text" id="cnTitle" maxlength="80" value="${uniqueTitle(defaultTitle(type, target))}" autofocus></label>
-      <label class="f">Art<select id="cnType">${opts(Core.courseTypesOf(S), type)}</select></label><label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select id="cnTarget">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], target)}</select></label>
+      <label class="f">Art<select id="cnType">${opts(typeOpts(Core.courseTypesOf(S)), type)}</select></label><label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select id="cnTarget">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], target)}</select></label>
       <label class="f">Beginn<input type="date" id="cnStart" min="${yr}-01-01" max="${yr}-12-31" value="${S.settings.start}"></label><label class="f">Ende<input type="date" id="cnEnd" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Plätze<input type="number" id="cnSeats" min="1" max="500" value="12" style="width:100%"></label></div>
     <p class="small muted">${cfgDays ? 'Der Ausbildungsweg sieht ' + cfgDays + ' Arbeitstage vor. ' : ''}Es zählen die Arbeitstage (Mo–Fr, ohne Feiertage) zwischen Beginn und Ende.</p>`,

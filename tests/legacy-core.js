@@ -23,6 +23,7 @@ export function normalizeState(st) {
   if (c.settings) delete c.settings.courseBlocks;
   // eigene Schritte und abweichende Dienstregeln kennt die Einzeldatei nicht; leer entsprechen sie ihrem Verhalten
   if (Array.isArray(c.measures) && !c.measures.length) delete c.measures;
+  if (c.measureEdits && !Object.keys(c.measureEdits).length) delete c.measureEdits;
   if (c.settings && c.settings.shifts && !Object.keys(c.settings.shifts).length) delete c.settings.shifts;
   return c;
 }

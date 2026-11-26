@@ -54,10 +54,10 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 
 | Bereich | Funktionen |
 |---|---|
-| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen, Kapazität je Bereich und Dienst |
+| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen und Zoom vom Jahr bis zum einzelnen Tag, Kapazität je Bereich und Dienst |
 | Lehrgänge | Lehrgänge als zusammenhängende Blöcke mit Plätzen und Teilnehmern: Bedarf je Art, Zeitleiste, Termine einspielen, beste Zeiträume und beste Besetzung berechnen |
 | Stammdaten | Personen & Cluster, Termine, Abwesenheiten, Ferien, Feiertage |
-| Ausbildungswege | Je Cluster oder individuell; Reihenfolge der Schritte per Ziehen, eigene Schritte anlegen, je Maßnahme die zulässigen Dienste (Früh, Spät, Nacht) |
+| Ausbildungswege | Je Cluster oder individuell; Reihenfolge der Schritte per Ziehen, eigene Schritte anlegen, vorgegebene Schritte anpassen (Bezeichnung, Kürzel, Farbe, Art), je Maßnahme die zulässigen Dienste (Früh, Spät, Nacht), Regeln der Planung einstellbar |
 | Planer | Vergleich vieler Reihenfolgen, Vorher/Nachher-Vergleich, fixierte Termine bleiben stehen, Kapazitäts- oder Szenariomodus |
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
@@ -87,6 +87,18 @@ Reihenfolge ein. Neben den festen Maßnahmen kann ein Projekt eigene Schritte f�
 Lehrgang. Für jede Maßnahme ist einstellbar, in welchen Diensten sie stattfinden darf (Vorgabe: Logbook in jedem
 Dienst, alles andere im Frühdienst). Planer, Ablegeprüfung im Jahresplan und Konfliktprüfung richten sich danach.
 
+Ein geänderter Weg kommt mit „In den Jahresplan übernehmen“ in den Plan: Der Planer verteilt dann nur die berechneten
+Termine der betroffenen Person (oder der Personen des Clusters) neu, alle anderen Termine bleiben stehen
+(`replanPeople`, `runPlan` mit `only`).
+
+Auch die vorgegebenen Schritte (Theorie, Praxis, Logbook, FitCheck …) lassen sich anpassen: Bezeichnung, Kürzel,
+Farbe und – solange es keine Termine gibt – die Art. Der Name der Maßnahme bleibt dabei der Schlüssel in Terminen
+und Dateien; geändert wird nur die Anzeige (`measureEdits`).
+
+Die Regeln der Vorgängerversion sind einstellbar (`settings.rules`, gespeichert wird nur die Abweichung): für welche
+Cluster der Praxis-Lehrgang Voraussetzung ist, der Weg für die Zielstufe TEC, das Zurückstellen von A320, „Kombikurs
+nur für Zielstufe TEC“ und der automatische Vorbereitungstag vor der ICA. Ohne Änderung rechnet der Planer wie bisher.
+
 ### Lehrgänge
 
 Lehrgänge (TEC, CAT A, CAT Praxis …) werden nicht tageweise verteilt, sondern als Block mit Zeitraum und Plätzen
@@ -100,6 +112,9 @@ Cluster 5 mit genau diesem Muster, Lehrgänge ohne Zielmuster für den CAT-A-Kur
 Im Jahresplan lassen sich Ausbildungselemente auf eine Person ziehen, Balken verschieben und Personen auf einen
 Lehrgangsplatz setzen. Schon beim Ziehen zeigt jeder Tag grün, gelb oder rot, ob die Kapazität reicht; beim Ablegen
 folgt die Prüfung. Gegen die Grenze wird nie stillschweigend geplant.
+
+Der Zeitraum reicht von „Jahr“ bis „2 Wochen“; ab „Monat“ steht jeder Tag mit Wochentag und Datum über dem Plan.
+Strg + Mausrad zoomt stufenweise.
 
 ### Mehrere Planungsjahre
 
@@ -191,12 +206,14 @@ das Planungsjahr aus dem Datum ableiten.
   `legacy/M1_Qualifikationscockpit_v4.html` und vergleicht Demo-Daten, Index, Planung in mehreren
   Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
   bisherigen Modus (Kurse tageweise, Vorgabe der Dienste, feste Reihenfolge); Lehrgänge als Blöcke, Urlaubsplan-Import,
-  die Prüfung beim Ablegen, eigene Schritte, Dienstregeln und freie Reihenfolge haben eigene Tests.
+  die Prüfung beim Ablegen, eigene Schritte, Dienstregeln, freie Reihenfolge, angepasste feste Schritte und die
+  Regeln der Planung haben eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
   Wiederherstellung, den Jahreswechsel, den leeren Start und den Übungsmodus, den Urlaubsplan-Import aus Excel,
   Lehrgangsvorschläge, das Ziehen im Jahresplan, Reihenfolge, eigene Schritte und Dienste in den Ausbildungswegen,
-  die Dienstplan-Bearbeitung je Person,
+  die Dienstplan-Bearbeitung je Person, das Anpassen fester Schritte, die Regeln der Planung, die Übernahme eines
+  geänderten Wegs in den Jahresplan, den Zoom im Jahresplan,
   das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
   Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
   Installation einer Aktualisierung unter Windows selbst.
