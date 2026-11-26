@@ -6,9 +6,9 @@
 export { FORMAT, VERSION, EPS, AREAS, SHIFTS, TYPES, LOGBOOK, PREP, CLUSTERS, ROUTE_CLUSTERS, DEFAULT_ROUTES, ABS_TYPES, TARGETS, LEVELS, PATTERNS, COURSE_TYPES, isCourseType } from './constants.js';
 export { clone, num, fin, clamp, uid, kOf, kArea, kShift } from './util.js';
 export { validDate, addDays, fmtDE, fmtShort, normDate, makeCalendar, firstMonday, isoWeek, holidaysBavaria, planningYear } from './dates.js';
-export { defaultConfig, defaultLimits, defaultSettings, emptyState } from './defaults.js';
+export { defaultConfig, defaultLimits, defaultSettings, emptyState, newProjectState } from './defaults.js';
 export { isLocked, parseCluster, normShift, normPerson, normCredit, creditOf, assignAliases, routeOf, cfgOf } from './people.js';
-export { decodeRoster, encodeRoster, rosterCode } from './roster.js';
+export { decodeRoster, encodeRoster, rosterCode, setRosterDays, fillRoster, fillRosterWeekly, copyRoster, clearRoster } from './roster.js';
 export { buildIndex, assign, capInfo, eventK } from './indexing.js';
 export { runPlan, scorePlan, planVariants, optimizePlan, betterScore } from './planner.js';
 export { findConflicts } from './conflicts.js';

@@ -76,7 +76,17 @@ VIEWS.help = {
           ${step(6, 'Nacharbeiten', html`Im Jahresplan einzelne Elemente mit der Maus verschieben oder neu hineinziehen; das Programm prüft sofort die Kapazität. ${go('year', 'Jahresplan')}`)}
           ${step(7, 'Prüfen, speichern, weitergeben', html`Bericht ansehen, ${isDesktop ? html`mit ${kbd('Strg', 'S')} speichern` : 'Projektdatei sichern'}, Gesamtbericht als PDF oder die Excel-Arbeitsmappe ausgeben. ${go('report', 'Bericht')}`)}
         </ol>
-        <div class="note">Der <b>Dienstplan</b> darf vorerst fehlen: Dann gilt für jede Person ihr Dienst aus den Stammdaten, und die Kapazität ist eine Näherung. Sobald der echte Dienstplan vorliegt, spielen Sie ihn unter „Daten & Datenschutz“ ein – am Vorgehen ändert sich nichts.</div></section>
+        <h3>Dienstplan eintragen</h3>
+        <p>In einem neuen Projekt gilt jeder Tag als <b>frei</b>, bis ein Dienst eingetragen ist. Ohne Dienste kann der Planer nichts verteilen. Es gibt zwei Wege:</p>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Weg</th><th>So geht es</th></tr></thead><tbody>
+          <tr><td><b>Als Excel einspielen</b></td><td>Unter ${go('data', 'Daten & Datenschutz')} die Karte „Dienstplan“: Liste oder Tabelle mit einer Zeile je Person und einer Spalte je Tag (F, S, N, Frei). Gilt für alle Personen der Datei.</td></tr>
+          <tr><td><b>Je Person von Hand</b></td><td>Person anklicken – die Seitenleiste öffnet sich. <b>„Dienstplan bearbeiten“</b> zeigt sie groß und blendet die Werkzeuge ein.</td></tr></tbody></table></div>
+        <div class="tblwrap" style="margin-top:8px"><table class="tbl"><thead><tr><th>Werkzeug in der Seitenleiste</th><th>Wirkung</th></tr></thead><tbody>
+          <tr><td><b>Eintragen</b></td><td>Dienst (Früh, Spät, Nacht, Frei) und Bereich wählen, dann einen Tag anklicken. Von einem Tag zum anderen ziehen trägt den Zeitraum dazwischen ein – an den gewählten Wochentagen.</td></tr>
+          <tr><td><b>Zeitraum füllen</b></td><td>Trägt den gewählten Dienst von–bis an den gewählten Wochentagen ein, z. B. das ganze Jahr Mo–Fr Früh.</td></tr>
+          <tr><td><b>Wochenfolge</b></td><td>Der Dienst wechselt wochenweise, z. B. Früh → Spät → Nacht. Die Woche des Startdatums ist Woche 1; übrige Tage des Zeitraums werden frei.</td></tr>
+          <tr><td><b>Übernehmen / Übertragen</b></td><td>Den Dienstplan einer anderen Person übernehmen – oder den eigenen auf alle mit gleichem Bereich und Dienst, auf den Cluster oder auf alle übertragen.</td></tr></tbody></table></div>
+        <div class="note">Jede Aktion ist ein Schritt für „Rückgängig“. Wer Tage ohne Eintrag lieber mit dem Dienst aus den Stammdaten rechnen lässt, schaltet das unter ${go('capacity', 'Kapazität')} in den Einstellungen um; im Kalender erscheinen solche Tage blass.</div></section>
 
       <section class="card" id="h-urlaub"><h2>3 · Urlaubsplan einspielen</h2>
         <p>Erwartet wird die übliche Excel-Tabelle: <b>eine Zeile je Person, eine Spalte je Tag</b>, in den Zellen Kürzel. Vorn steht die Personalnummer oder der Name.</p>
@@ -228,6 +238,7 @@ VIEWS.help = {
           ${term('Lehrgang', 'Zusammenhängender Block für eine Gruppe mit Zeitraum und Plätzen: Theorie, Praxis, Basic Knowledge, FG650.')}
           ${term('Practical Logbook', 'Praktische Ausbildung im laufenden Dienst, tageweise mit Mentor.')}
           ${term('FitCheck / ICA', 'Prüfungsschritte; in der Vorgabe nur im Frühdienst. Vor der ICA liegt ein Tag Vorbereitung für Prüfer oder TEC.')}
+          ${term('Dienstplan', 'Je Person und Tag: Früh, Spät, Nacht in einem Bereich – oder frei. Ohne Eintrag gilt ein Tag in neuen Projekten als frei.')}
           ${term('Übungsmodus', 'Füllt das leere Programm mit simulierten Daten zum Einarbeiten. Ein- und ausschaltbar unter „Daten & Datenschutz“.')}
           ${term('Eigener Schritt', 'Eine selbst angelegte Maßnahme im Ausbildungsweg – einzeln im Dienst oder als Lehrgang.')}
           ${term('Kapazitätstag', 'Ein Kopf, der der Produktion einen Tag lang fehlt. Mentor 0,5 an 10 Tagen = 5 Kapazitätstage.')}

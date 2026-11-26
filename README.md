@@ -61,7 +61,8 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 | Planer | Vergleich vieler Reihenfolgen, Vorher/Nachher-Vergleich, fixierte Termine bleiben stehen, Kapazitäts- oder Szenariomodus |
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
-| Normalbetrieb | Das Programm startet leer; Personen, Urlaubsplan, Lehrgänge und Dienstplan werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Normalbetrieb | Das Programm startet leer; Personen, Dienstplan, Urlaubsplan und Lehrgänge werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Dienstplan | Als Excel einspielen oder je Person in der Seitenleiste eintragen: Dienst per Auswahl, Tage anklicken oder ziehen, Zeitraum und Wochenfolge füllen, auf andere Personen übertragen. Tage ohne Eintrag gelten in neuen Projekten als frei. |
 | Übungsmodus | Ein- und ausschaltbar: füllt das Fenster mit vollständig simulierten Daten zum Einarbeiten; Ausschalten leert das Programm wieder |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
 | Mehrere Jahre | Planungsjahre in einem Projekt, Folgejahr anlegen mit Übernahme, Vorleistungen aus Vorjahren, Jahresvergleich |
@@ -74,6 +75,10 @@ Nach dem Start ist das Programm leer. Daten werden einzeln eingespielt (Stammdat
 Dienstplan) oder ein gespeichertes Projekt wird geöffnet. Zum Einarbeiten füllt der Übungsmodus das Fenster mit
 erfundenen Personen samt Dienstplan, Urlaub, Lehrgängen und berechnetem Jahresplan. Der Schalter steht unter
 „Daten & Datenschutz“ und bleibt gespeichert; wer ein eigenes Projekt öffnet oder anlegt, verlässt den Übungsmodus.
+
+In einem neuen Projekt gilt jeder Tag als frei, bis ein Dienst eingetragen ist – nichts wird aus den Stammdaten
+angenommen. Der Dienstplan wird als Excel eingespielt oder je Person in ihrer Seitenleiste eingetragen (dort macht
+„Dienstplan bearbeiten“ die Seitenleiste groß). Das frühere Verhalten bleibt als Einstellung unter „Kapazität“.
 
 ### Ausbildungswege
 
@@ -179,6 +184,9 @@ GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub
 
 ### Absicherung
 
+Die Fenstertests laufen mit fester Uhr der Oberfläche (Planungsjahr 2027), weil der leere Start und der Übungsmodus
+das Planungsjahr aus dem Datum ableiten.
+
 - **Gleichheit mit der HTML-Fassung:** `tests/parity.test.js` lädt den Rechenkern aus
   `legacy/M1_Qualifikationscockpit_v4.html` und vergleicht Demo-Daten, Index, Planung in mehreren
   Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
@@ -188,6 +196,7 @@ GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
   Wiederherstellung, den Jahreswechsel, den leeren Start und den Übungsmodus, den Urlaubsplan-Import aus Excel,
   Lehrgangsvorschläge, das Ziehen im Jahresplan, Reihenfolge, eigene Schritte und Dienste in den Ausbildungswegen,
+  die Dienstplan-Bearbeitung je Person,
   das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
   Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
   Installation einer Aktualisierung unter Windows selbst.

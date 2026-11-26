@@ -18,6 +18,7 @@ const PACKAGED = process.env.M1_APP || '';
 const ARGS = [...(PACKAGED ? [] : ['.']), '--user-data-dir=' + USER_DATA, ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
 let app, page;
 const errors = [];
+const CLOCK = '2026-11-26T09:00:00';               // aus Sicht der Oberfläche: Planungsjahr 2027
 // In den Tests sucht das Programm höchstens nach einer neuen Version – geladen oder installiert wird nichts
 process.env.M1_UPDATE_DRY = '1';
 
@@ -27,6 +28,12 @@ async function launch(extra = [], env = {}) {
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.waitForSelector('#main h1');
+  // Die Tests rechnen mit dem Planungsjahr 2027. Das Programm leitet es aus dem Datum ab – deshalb steht die Uhr der
+  // Oberfläche hier fest (Zeitgeber laufen normal weiter), und die Oberfläche startet damit noch einmal.
+  await page.clock.setFixedTime(new Date(CLOCK));
+  await page.reload();
+  await page.waitForSelector('#main h1');
+  assert.equal(await page.evaluate(() => new Date().getFullYear() + '-' + (new Date().getMonth() + 1)), '2026-11', 'feste Uhr der Oberfläche');
   return page;
 }
 /** Beendet das Programm und wartet, bis der Prozess wirklich fort ist – sonst weist die Einzelinstanz-Sperre den nächsten Start ab. */
@@ -385,6 +392,56 @@ test('Ausbildungswege: Reihenfolge per Ziehen, eigener Schritt und zulässige Di
   assert.ok(await page.locator('.pchip:has-text("HF")').count(), 'eigener Schritt lässt sich in den Jahresplan ziehen');
 });
 
+test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge und Ziehen', async () => {
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  await page.click('.g-row >> nth=0 >> .g-lab'); await page.waitForSelector('#pcal');
+  const width = () => page.evaluate(() => Math.round(document.querySelector('#drawer').getBoundingClientRect().width));
+  // Buchstaben der Tage ab einem Tagesindex (0 = 1. Januar): F, S, N oder · für frei
+  const letters = (from, n) => page.evaluate(([a, c]) => Array.from({ length: c }, (_, i) => (document.querySelector('#pcal i[data-d="' + (a + i) + '"] b') || {}).textContent || '·').join(''), [from, n]);
+  const narrow = await width();
+  assert.equal(await page.locator('#rosTools').count(), 0, 'Werkzeuge erscheinen erst beim Bearbeiten');
+  await page.click('[data-act="ros-edit"]'); await page.waitForSelector('#rosTools');
+  assert.ok(await width() > narrow + 150, 'Bearbeiten zeigt die Seitenleiste groß');
+  // leeren: ohne Eintrag ist jeder Tag frei
+  await page.click('[data-act="ros-clear"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await letters(3, 7)) === '·······', 'geleerter Dienstplan');
+  assert.match(await page.textContent('#drawer'), /Tage ohne Eintrag gelten als frei/);
+  // Zeitraum füllen: Früh, Mo–Fr, ganzes Jahr (04.–10.01.2027 = Montag bis Sonntag)
+  await page.click('[data-act="ros-fill"]');
+  await waitFor(async () => (await letters(3, 7)) === 'FFFFF··', 'Frühdienst Montag bis Freitag');
+  assert.match(await toastText(), /261 Tage als M1 · Früh eingetragen/);
+  // Wochenfolge Früh → Spät → Nacht ab 01.03.2027 (ein Montag)
+  await page.fill('#rosTools input[data-f="start"]', '2027-03-01'); await page.selectOption('#rosSeq2', 'Nacht');
+  await page.click('[data-act="ros-week"]');
+  await waitFor(async () => (await letters(59, 21)) === 'FFFFF··SSSSS··NNNNN··', 'Wochenfolge');
+  // Dienst per Auswahl wählen, dann von einem Tag zum anderen ziehen – auch über die Monatsgrenze (31.05. bis 04.06.)
+  await page.selectOption('#rosShift', 'Frei');
+  await page.evaluate(() => document.querySelector('#pcal i[data-d="154"]').scrollIntoView({ block: 'center' }));      // beide Zeilen ins Bild, auch auf kleinen Bildschirmen
+  const a = await page.locator('#pcal i[data-d="150"]').boundingBox(), b = await page.locator('#pcal i[data-d="154"]').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 }); await page.mouse.up();
+  await waitFor(async () => (await letters(150, 5)) === '·····', 'überstrichener Zeitraum ist frei');
+  // ein einzelner Klick trägt genau diesen Tag ein
+  await page.selectOption('#rosShift', 'Nacht'); await page.selectOption('#rosArea', 'M2');
+  await page.evaluate(() => document.querySelector('#rosTools').scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => document.querySelector('#pcal i[data-d="152"]').scrollIntoView({ block: 'center' }));
+  await page.click('#pcal i[data-d="152"]');
+  await waitFor(async () => (await letters(150, 5)) === '··N··', 'einzelner Tag');
+  assert.match(await toastText(), /1 Tag als M2 · Nacht eingetragen/);
+  // auf andere Personen übertragen und mit Rückgängig zurück
+  await page.click('[data-act="ros-copy-to"]'); await page.waitForSelector('input[name=rosTo]');
+  await page.check('input[name=rosTo][value="all"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /auf 140 Personen übertragen/.test(await toastText()), 'Übertragen');
+  await menu('act', 'undo');
+  await waitFor(async () => /rückgängig/.test(await toastText()), 'Rückgängig');
+  // Größe umschalten, Bearbeiten beenden
+  await page.click('[data-act="drawer-size"]'); assert.equal(await width(), narrow);
+  await page.click('[data-act="drawer-size"]'); assert.ok(await width() > narrow + 150);
+  await page.click('[data-act="ros-edit"]');
+  assert.equal(await page.locator('#rosTools').count(), 0);
+  await page.click('[data-act="drawer-close"]');
+});
+
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });
 
 test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', async () => {
@@ -427,7 +484,8 @@ test('Fehleraufzeichnung: Programmfehler landen ohne Projektdaten im Protokoll',
   if (!app) await launch();
   const log = path.join(USER_DATA, 'Fehlerprotokoll.txt');
   fs.rmSync(log, { force: true });
-  await page.evaluate(() => { setTimeout(() => { null.fehlt; }, 0); });
+  // ein Programmfehler in einer Ereignisbehandlung – so, wie er in der Oberfläche tatsächlich aufträte
+  await page.evaluate(() => { document.body.addEventListener('m1-testfehler', () => { null.fehlt; }, { once: true }); document.body.dispatchEvent(new Event('m1-testfehler')); });
   await waitFor(() => fs.existsSync(log), 'Eintrag im Fehlerprotokoll');
   const text = fs.readFileSync(log, 'utf8');
   assert.match(text, /Version \d+\.\d+\.\d+ {2}Oberfläche: Programmfehler: TypeError/);

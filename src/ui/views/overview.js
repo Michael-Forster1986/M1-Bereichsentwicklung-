@@ -22,7 +22,7 @@ function buildHints() {
   if (SUM.route.partial) add('warn', pl(SUM.route.partial, 'Ausbildungsweg lässt', 'Ausbildungswege lassen') + ' sich ' + S.meta.year + ' nur teilweise einplanen.', ['Zum Bericht', 'go', 'report']);
   if (SUM.route.none) add('warn', pl(SUM.route.none, 'Person mit Ausbildungsweg hat', 'Personen mit Ausbildungsweg haben') + ' noch keine Termine.', ['Zum Bericht', 'go', 'report']);
   const noRoster = S.people.filter(p => !S.roster[p.pk]).length;
-  if (noRoster === S.people.length) add(st.strict ? 'crit' : 'warn', 'Kein Dienstplan geladen – ' + (st.strict ? 'im strikten Modus kann nichts geplant werden.' : 'es gilt die Szenariozuordnung je Person.'), ['Dienstplan importieren', 'go', 'data']);
+  if (noRoster === S.people.length) add(st.strict ? 'crit' : 'warn', 'Kein Dienstplan eingetragen – ' + (st.strict ? 'ohne Dienste kann nichts geplant werden. Als Excel einspielen oder je Person in ihrer Seitenleiste eintragen.' : 'es gilt der Dienst je Person aus den Stammdaten.'), ['Dienstplan importieren', 'go', 'data']);
   else if (noRoster) add('warn', 'Für ' + nf(noRoster) + ' Personen fehlt der Dienstplan.', ['Daten prüfen', 'go', 'data']);
   if (S.meta.simulated.roster && S.meta.dataClass !== 'demo') add('warn', 'Der Dienstplan ist simuliert, nicht der freigegebene Plan.', ['Realen Dienstplan laden', 'go', 'data']);
   if (S.meta.simulated.absences && S.meta.dataClass !== 'demo') add('warn', 'Urlaub und Abwesenheiten sind simuliert.', ['Finale Abwesenheiten laden', 'go', 'data']);
