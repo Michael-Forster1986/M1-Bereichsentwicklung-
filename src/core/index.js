@@ -1,3 +1,8 @@
+/* ==========================================================================
+ * M1 Qualifikationscockpit · Rechenkern
+ * Reine Logik ohne DOM: Kalender, Kapazität, Planer, Konflikte, Importe.
+ * Enthält keinerlei Personendaten; Demo-Daten werden synthetisch erzeugt.
+ * ========================================================================== */
 export { FORMAT, VERSION, EPS, AREAS, SHIFTS, TYPES, LOGBOOK, PREP, CLUSTERS, ROUTE_CLUSTERS, DEFAULT_ROUTES, ABS_TYPES, TARGETS, LEVELS, PATTERNS } from './constants.js';
 export { clone, num, fin, clamp, uid, kOf, kArea, kShift } from './util.js';
 export { validDate, addDays, fmtDE, fmtShort, normDate, makeCalendar, firstMonday, isoWeek, holidaysBavaria } from './dates.js';
@@ -11,7 +16,8 @@ export { routeProgress, summarize } from './summary.js';
 export { courseAssess, courseSearch, pickSlots, courseEvents } from './courses.js';
 export { TEMPLATES, parseCSV, rowsToObjects, toCSV } from './csv.js';
 export { checkPeople, applyPeople, checkRoster, applyRoster, checkAbsences, applyAbsences, checkCapacity, checkEvents } from './imports.js';
-export { sanitize, migrateLegacy, loadAny } from './project.js';
+export { sanitize, migrateLegacy, loadAny, readPayload } from './project.js';
+export { PROJECT_VERSION, wrapProject, projectYears, isProjectPayload, sanitizeProject, sanitizeAny, loadProject, serializeProject } from './workspace.js';
 export { pseudonymize, reidentify } from './pseudonym.js';
 export { demoState } from './demo.js';
 export { readXlsx, xlsxPeopleTable } from './xlsx-read.js';

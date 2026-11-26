@@ -2,7 +2,8 @@ import * as Core from '../../core/index.js';
 import { csvDownload, download, pickFile, templateDownload } from '../files.js';
 import { $, html, raw } from '../dom.js';
 import { DATA_CLASS, fmt, fmtS, nf } from '../format.js';
-import { CONF, IX, LS, S, SUM, autosave, commit, future, hist, privacy, replaceState, setS, store } from '../state.js';
+import { isDesktop } from '../../platform/desktop.js';
+import { CONF, IX, S, SUM, autosaveOn, clearAutosave, commit, privacy, resetAll, setAutosave } from '../state.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, VIEWS } from '../registry.js';
 import { go, render } from '../shell.js';
@@ -93,22 +94,29 @@ ACT['imp-key'] = async () => {
 };
 ACT['tpl'] = t => templateDownload(t.dataset.k);
 ACT['exp-roster'] = () => { const sc = impScope(), a = IX.cal.idx(sc.start), b = IX.cal.idx(sc.end), rows = []; S.people.forEach((p, i) => { for (let d = a; d <= b; d++) { const c = IX.ros[i][d]; rows.push([privacy() ? p.alias : p.pk, IX.cal.iso[d], c >= 2 ? Core.kArea(c - 2) : 'M1', c >= 2 ? Core.kShift(c - 2) : 'Frei']); } }); csvDownload('Dienstplan', Core.TEMPLATES.roster, rows); };
-ACT['exp-pseudo'] = () => {
-  const { state, key } = Core.pseudonymize(S), stamp = new Date().toISOString().slice(0, 10);
-  download('M1_Cockpit_' + S.meta.year + '_Projekt_' + stamp + '_pseudonymisiert.json', JSON.stringify(state));
-  if (S.meta.dataClass === 'real') setTimeout(() => download('M1_Cockpit_' + S.meta.year + '_Schluesseldatei_' + stamp + '_VERTRAULICH.csv', Core.toCSV(Core.TEMPLATES.key, key.map(k => [k.alias, k.pk, k.name, k.org])), 'text/csv'), 600);
-  toast(S.meta.dataClass === 'real' ? 'Zwei Dateien: pseudonymisierte Projektdatei und Schlüsseldatei. Die Schlüsseldatei bleibt in der geschützten Umgebung.' : 'Pseudonymisierte Projektdatei gesichert');
+ACT['exp-pseudo'] = async () => {
+  const { state, key } = Core.pseudonymize(S), stamp = new Date().toISOString().slice(0, 10), real = S.meta.dataClass === 'real';
+  if (!await download('M1_Cockpit_' + S.meta.year + '_Projekt_' + stamp + '_pseudonymisiert.json', JSON.stringify(state))) return;
+  if (real) {
+    if (!isDesktop) await new Promise(r => setTimeout(r, 600));                 // Browser: zweiter Download erst nach dem ersten
+    await download('M1_Cockpit_' + S.meta.year + '_Schluesseldatei_' + stamp + '_VERTRAULICH.csv', Core.toCSV(Core.TEMPLATES.key, key.map(k => [k.alias, k.pk, k.name, k.org])), 'text/csv');
+  }
+  toast(real ? 'Zwei Dateien: pseudonymisierte Projektdatei und Schlüsseldatei. Die Schlüsseldatei bleibt in der geschützten Umgebung.' : 'Pseudonymisierte Projektdatei gesichert');
 };
 CHG.imp = t => { IMP[t.dataset.f] = t.type === 'checkbox' ? t.checked : t.value; };
 CHG.meta = t => { const v = t.value.trim().slice(0, 120); if (v) commit('Projekttitel gespeichert', () => { S.meta.title = v; }); };
-CHG.autosave = t => { if (t.checked) { store.set(LS.on, '1'); autosave(); toast('Zwischenspeichern im Browser eingeschaltet'); } else { store.del(LS.on); store.del(LS.state); toast('Zwischenspeicher ausgeschaltet und geleert'); } render(); };
+CHG.autosave = t => {
+  setAutosave(t.checked);
+  toast(t.checked ? (isDesktop ? 'Wiederherstellungskopie eingeschaltet' : 'Zwischenspeichern im Browser eingeschaltet') : (isDesktop ? 'Wiederherstellungskopie ausgeschaltet und gelöscht' : 'Zwischenspeicher ausgeschaltet und geleert'));
+  render();
+};
 ACT['wipe'] = async () => {
-  if (!await confirmDlg('Alle Daten aus diesem Fenster entfernen', 'Planungsstand, Rückgängig-Verlauf und Browser-Zwischenspeicher werden geleert. Nicht gesicherte Änderungen gehen verloren.', 'Alles entfernen', true)) return;
-  store.del(LS.state); hist.length = 0; future.length = 0; const y = S.meta.year; setS(null); replaceState(Core.emptyState(y), 'Alle Daten entfernt'); hist.length = 0; go('data');
+  if (!await confirmDlg('Alle Daten aus diesem Fenster entfernen', 'Planungsstand, Rückgängig-Verlauf und ' + (isDesktop ? 'Wiederherstellungskopie' : 'Browser-Zwischenspeicher') + ' werden geleert. Nicht gesicherte Änderungen gehen verloren.' + (isDesktop ? ' Gespeicherte Projektdateien bleiben unberührt.' : ''), 'Alles entfernen', true)) return;
+  clearAutosave(); resetAll(Core.emptyState(S.meta.year)); go('data');
 };
 VIEWS.data = {
   render() {
-    const sc = impScope(), yr = String(S.meta.year), withRoster = S.people.filter(p => S.roster[p.pk]).length, sim = S.meta.simulated, on = store.get(LS.on) === '1';
+    const sc = impScope(), yr = String(S.meta.year), withRoster = S.people.filter(p => S.roster[p.pk]).length, sim = S.meta.simulated, on = autosaveOn();
     let covered = 0; for (let d = 0; d < IX.n; d++) if (IX.rosterDay[d]) covered++;
     const hist2 = S.realImports.slice(-4).map(r => (r.kind === 'roster' ? 'Dienstplan' : 'Abwesenheiten') + ' ' + fmtS(r.start) + '–' + fmt(r.end)).join(' · ');
     const card = (title, text, buttons, extra = '') => html`<div class="dc"><h3>${title}</h3><p>${text}</p>${extra}<div class="row">${buttons}</div></div>`;

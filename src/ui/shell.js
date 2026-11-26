@@ -1,3 +1,4 @@
+import { isDesktop } from '../platform/desktop.js';
 import { $, $$, html, raw, setHTML } from './dom.js';
 import { DATA_CLASS, nf } from './format.js';
 import { CONF, LS, S, UI, autosave, dirty, future, hist, privacy, redo, store, undo } from './state.js';
@@ -56,8 +57,8 @@ export function renderTop() {
     <button class="btn primary" data-act="plan" data-tip="Jahresplanung berechnen und vor der Übernahme vergleichen">Neu berechnen</button>
     <button class="btn" data-act="undo" ${hist.length ? '' : raw('disabled')} aria-label="Rückgängig" data-tip="Rückgängig (Strg+Z)">↶</button>
     <button class="btn hide-xs" data-act="redo" ${future.length ? '' : raw('disabled')} aria-label="Wiederholen" data-tip="Wiederholen (Strg+Y)">↷</button>
-    <button class="btn hide-xs" data-act="save-project" data-tip="Projektdatei sichern (Strg+S)">Sichern${dirty ? ' •' : ''}</button>
-    <button class="btn hide-s" data-act="load-project" data-tip="Projektdatei oder Datei der Vorgängerversion laden">Laden</button>
+    <button class="btn hide-xs" data-act="save-project" data-tip="${isDesktop ? 'Projekt speichern (Strg+S) · Speichern unter: Strg+Umschalt+S' : 'Projektdatei sichern (Strg+S)'}">${isDesktop ? 'Speichern' : 'Sichern'}${dirty ? ' •' : ''}</button>
+    <button class="btn hide-s" data-act="load-project" data-tip="Projektdatei oder Datei der Vorgängerversion laden">${isDesktop ? 'Öffnen' : 'Laden'}</button>
     <button class="btn ${privacy() ? 'on' : ''}" data-act="toggle-privacy" aria-pressed="${privacy()}" data-tip="Namen und Personalnummern durch Pseudonyme ersetzen – für Präsentationen und Bildschirmfotos">${privacy() ? 'Namen verborgen' : 'Namen sichtbar'}</button>
     <button class="btn hide-xs" data-act="toggle-theme" aria-label="Hell oder dunkel" data-tip="Hell / Dunkel">◐</button>`);
 }

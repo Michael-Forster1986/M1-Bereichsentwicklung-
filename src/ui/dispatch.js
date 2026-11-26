@@ -1,5 +1,6 @@
 import { $ } from './dom.js';
-import { LS, S, UI, dirty, redo, store, undo } from './state.js';
+import { isDesktop } from '../platform/desktop.js';
+import { S, UI, autosaveOn, dirty, redo, undo } from './state.js';
 import { closeDrawer, closeModal, modalHandlers, safe } from './dialogs.js';
 import { ACT, CHG, INP } from './registry.js';
 import { deferred, rendering } from './shell.js';
@@ -19,8 +20,9 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && !e.altKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
     if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); }
     if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
-    if (e.key.toLowerCase() === 's') { e.preventDefault(); ACT['save-project'](); }
+    if (e.key.toLowerCase() === 's') { e.preventDefault(); safe(() => ACT[e.shiftKey && isDesktop ? 'save-project-as' : 'save-project']()); }
   }
 });
 $('#modal').addEventListener('pointerdown', e => { if (e.target === e.currentTarget) closeModal(); });
-window.addEventListener('beforeunload', e => { if (dirty && S && S.meta.dataClass !== 'demo' && store.get(LS.on) !== '1') { e.preventDefault(); e.returnValue = ''; } });
+// Browser: Warnung beim Verlassen. Im Desktop-Programm fragt stattdessen der Dialog „Änderungen speichern?“.
+if (!isDesktop) window.addEventListener('beforeunload', e => { if (dirty && S && S.meta.dataClass !== 'demo' && !autosaveOn()) { e.preventDefault(); e.returnValue = ''; } });

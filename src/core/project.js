@@ -122,8 +122,8 @@ function extractLegacyFromHtml(text) {
   }
   return null;
 }
-/** Erkennt Format und liefert einen geprüften Zustand. */
-export function loadAny(text, fileName = '') {
+/** Liest den Inhalt einer Projekt-, Sicherungs- oder HTML-Datei als Objekt (noch ungeprüft). */
+export function readPayload(text) {
   const t = String(text).replace(/^\uFEFF/, '').trimStart();
   let x, legacyHtml = false;
   if (t.startsWith('<')) {
@@ -132,6 +132,11 @@ export function loadAny(text, fileName = '') {
     else { try { x = extractLegacyFromHtml(t); } catch (err) { x = null; } legacyHtml = true; }
     if (!x) throw new Error('In der HTML-Datei wurde kein Planungsstand gefunden');
   } else x = JSON.parse(t);
+  return { x, legacyHtml };
+}
+/** Erkennt Format und liefert einen geprüften Zustand (ein Planungsjahr). */
+export function loadAny(text, fileName = '') {
+  const { x, legacyHtml } = readPayload(text);
   if (x && x.format === FORMAT) { const r = sanitize(x); return { ...r, kind: 'Projektdatei' }; }
   if (x && (x.version === 'M1-Cockpit-3' || (Array.isArray(x.people) && Array.isArray(x.roster)))) {
     const r = migrateLegacy(x); r.state.meta.source = (fileName ? fileName + ' · ' : '') + r.state.meta.source;
