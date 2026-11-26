@@ -38,6 +38,7 @@ function allowed(u) {
 }
 function plain(err) {
   const m = String((err && err.message) || err || '');
+  if (/ERR_BLOCKED_BY_CLIENT/i.test(m)) return 'Eine Adresse außerhalb des Aktualisierungs-Ziels wurde abgewiesen';
   if (/ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION|ERR_TIMED_OUT|ERR_PROXY|ERR_TUNNEL|ERR_BLOCKED|ERR_CERT|ERR_SSL|ERR_ADDRESS|ERR_NETWORK|ENOTFOUND|ETIMEDOUT|ECONNREFUSED/i.test(m)) return 'GitHub ist von diesem Rechner aus nicht erreichbar';
   if (/\b404\b|Unable to find latest version|latest\.yml|No published versions/i.test(m)) return 'Auf GitHub ist keine veröffentlichte Version zu finden';
   if (/sha512|checksum|signature/i.test(m)) return 'Die geladene Datei ist unvollständig oder verändert – sie wird nicht installiert';
