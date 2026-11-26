@@ -54,14 +54,15 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 
 | Bereich | Funktionen |
 |---|---|
-| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen, Kapazität je Bereich und Dienst |
+| Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen und Zoom vom Jahr bis zum einzelnen Tag, Kapazität je Bereich und Dienst |
 | Lehrgänge | Lehrgänge als zusammenhängende Blöcke mit Plätzen und Teilnehmern: Bedarf je Art, Zeitleiste, Termine einspielen, beste Zeiträume und beste Besetzung berechnen |
 | Stammdaten | Personen & Cluster, Termine, Abwesenheiten, Ferien, Feiertage |
-| Ausbildungswege | Je Cluster oder individuell; Reihenfolge der Schritte per Ziehen, eigene Schritte anlegen, je Maßnahme die zulässigen Dienste (Früh, Spät, Nacht) |
+| Ausbildungswege | Je Cluster oder individuell; Reihenfolge der Schritte per Ziehen, eigene Schritte anlegen, vorgegebene Schritte anpassen (Bezeichnung, Kürzel, Farbe, Art), je Maßnahme die zulässigen Dienste (Früh, Spät, Nacht), Regeln der Planung einstellbar |
 | Planer | Vergleich vieler Reihenfolgen, Vorher/Nachher-Vergleich, fixierte Termine bleiben stehen, Kapazitäts- oder Szenariomodus |
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
-| Normalbetrieb | Das Programm startet leer; Personen, Urlaubsplan, Lehrgänge und Dienstplan werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Normalbetrieb | Das Programm startet leer; Personen, Dienstplan, Urlaubsplan und Lehrgänge werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Dienstplan | Als Excel einspielen oder je Person in der Seitenleiste eintragen: Dienst per Auswahl, Tage anklicken oder ziehen, Zeitraum und Wochenfolge füllen, auf andere Personen übertragen. Tage ohne Eintrag gelten in neuen Projekten als frei. |
 | Übungsmodus | Ein- und ausschaltbar: füllt das Fenster mit vollständig simulierten Daten zum Einarbeiten; Ausschalten leert das Programm wieder |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
 | Mehrere Jahre | Planungsjahre in einem Projekt, Folgejahr anlegen mit Übernahme, Vorleistungen aus Vorjahren, Jahresvergleich |
@@ -75,12 +76,28 @@ Dienstplan) oder ein gespeichertes Projekt wird geöffnet. Zum Einarbeiten füll
 erfundenen Personen samt Dienstplan, Urlaub, Lehrgängen und berechnetem Jahresplan. Der Schalter steht unter
 „Daten & Datenschutz“ und bleibt gespeichert; wer ein eigenes Projekt öffnet oder anlegt, verlässt den Übungsmodus.
 
+In einem neuen Projekt gilt jeder Tag als frei, bis ein Dienst eingetragen ist – nichts wird aus den Stammdaten
+angenommen. Der Dienstplan wird als Excel eingespielt oder je Person in ihrer Seitenleiste eingetragen (dort macht
+„Dienstplan bearbeiten“ die Seitenleiste groß). Das frühere Verhalten bleibt als Einstellung unter „Kapazität“.
+
 ### Ausbildungswege
 
 Die Schritte eines Wegs lassen sich per Ziehen der Kacheln (oder mit den Pfeilen) umordnen; der Planer hält die
 Reihenfolge ein. Neben den festen Maßnahmen kann ein Projekt eigene Schritte führen – einzeln im Dienst oder als
 Lehrgang. Für jede Maßnahme ist einstellbar, in welchen Diensten sie stattfinden darf (Vorgabe: Logbook in jedem
 Dienst, alles andere im Frühdienst). Planer, Ablegeprüfung im Jahresplan und Konfliktprüfung richten sich danach.
+
+Ein geänderter Weg kommt mit „In den Jahresplan übernehmen“ in den Plan: Der Planer verteilt dann nur die berechneten
+Termine der betroffenen Person (oder der Personen des Clusters) neu, alle anderen Termine bleiben stehen
+(`replanPeople`, `runPlan` mit `only`).
+
+Auch die vorgegebenen Schritte (Theorie, Praxis, Logbook, FitCheck …) lassen sich anpassen: Bezeichnung, Kürzel,
+Farbe und – solange es keine Termine gibt – die Art. Der Name der Maßnahme bleibt dabei der Schlüssel in Terminen
+und Dateien; geändert wird nur die Anzeige (`measureEdits`).
+
+Die Regeln der Vorgängerversion sind einstellbar (`settings.rules`, gespeichert wird nur die Abweichung): für welche
+Cluster der Praxis-Lehrgang Voraussetzung ist, der Weg für die Zielstufe TEC, das Zurückstellen von A320, „Kombikurs
+nur für Zielstufe TEC“ und der automatische Vorbereitungstag vor der ICA. Ohne Änderung rechnet der Planer wie bisher.
 
 ### Lehrgänge
 
@@ -90,11 +107,19 @@ größte Gruppe teilnehmen kann, ohne dass an einem Lehrgangstag die Grenze der 
 „Neu berechnen“ vergibt freie Plätze in der Reihenfolge des Ausbildungswegs. Lehrgänge mit Zielmuster gelten für
 Cluster 5 mit genau diesem Muster, Lehrgänge ohne Zielmuster für den CAT-A-Kursrahmen der übrigen Cluster.
 
+Lehrgänge der Art Basic Knowledge können in Modulen geführt werden (M1 bis M17): Sind Teilbeleger dabei, bekommt jedes
+Modul einen Zeitraum oder die Kennzeichnung N/A (findet nicht statt), und je Person ist festgelegt, welche Module sie
+braucht. Ihr Termin liegt dann nur an diesen Tagen; Planer, Kapazitätsprüfung und Jahresplan rechnen modulgenau
+(`course.modules`, `person.modules`, `src/core/modules.js`). Ohne Teilbeleger genügen Beginn und Ende.
+
 ### Ziehen und Ablegen
 
 Im Jahresplan lassen sich Ausbildungselemente auf eine Person ziehen, Balken verschieben und Personen auf einen
 Lehrgangsplatz setzen. Schon beim Ziehen zeigt jeder Tag grün, gelb oder rot, ob die Kapazität reicht; beim Ablegen
 folgt die Prüfung. Gegen die Grenze wird nie stillschweigend geplant.
+
+Der Zeitraum reicht von „Jahr“ bis „2 Wochen“; ab „Monat“ steht jeder Tag mit Wochentag und Datum über dem Plan.
+Strg + Mausrad zoomt stufenweise.
 
 ### Mehrere Planungsjahre
 
@@ -179,15 +204,21 @@ GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub
 
 ### Absicherung
 
+Die Fenstertests laufen mit fester Uhr der Oberfläche (Planungsjahr 2027), weil der leere Start und der Übungsmodus
+das Planungsjahr aus dem Datum ableiten.
+
 - **Gleichheit mit der HTML-Fassung:** `tests/parity.test.js` lädt den Rechenkern aus
   `legacy/M1_Qualifikationscockpit_v4.html` und vergleicht Demo-Daten, Index, Planung in mehreren
   Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
   bisherigen Modus (Kurse tageweise, Vorgabe der Dienste, feste Reihenfolge); Lehrgänge als Blöcke, Urlaubsplan-Import,
-  die Prüfung beim Ablegen, eigene Schritte, Dienstregeln und freie Reihenfolge haben eigene Tests.
+  die Prüfung beim Ablegen, eigene Schritte, Dienstregeln, freie Reihenfolge, angepasste feste Schritte und die
+  Regeln der Planung sowie Module und Teilbeleger (tests/modules.test.js) haben eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
   Wiederherstellung, den Jahreswechsel, den leeren Start und den Übungsmodus, den Urlaubsplan-Import aus Excel,
   Lehrgangsvorschläge, das Ziehen im Jahresplan, Reihenfolge, eigene Schritte und Dienste in den Ausbildungswegen,
+  die Dienstplan-Bearbeitung je Person, das Anpassen fester Schritte, die Regeln der Planung, die Übernahme eines
+  geänderten Wegs in den Jahresplan, den Zoom im Jahresplan, Basic Knowledge mit Modulen und Teilbelegern,
   das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
   Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
   Installation einer Aktualisierung unter Windows selbst.

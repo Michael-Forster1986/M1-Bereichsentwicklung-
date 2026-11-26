@@ -1,6 +1,6 @@
 import * as Core from '../../core/index.js';
 import { html } from '../dom.js';
-import { TSHORT, dayLabel, fmt, fmtS, nf, sgn } from '../format.js';
+import { TSHORT, dayLabel, fmt, fmtS, nf, sgn, tname } from '../format.js';
 import { IX, P, S, UI, commit, pName } from '../state.js';
 import { closeModal, openModal, toast } from '../dialogs.js';
 import { trace } from '../../platform/desktop.js';
@@ -21,8 +21,8 @@ function specOf(src) {
   if (kind === 'new') return { kind, type: src.dataset.type, label: TSHORT[src.dataset.type] || src.dataset.type };
   if (kind === 'seat') { const c = S.courses.find(x => x.id === src.dataset.id); return c ? { kind, course: c, type: c.type, label: c.title } : null; }
   const e = IX.evById.get(src.dataset.id); if (!e) return null;
-  if (e.courseId) return { kind: 'locked', label: e.title || e.type };
-  return { kind: 'event', event: e, type: e.type, label: e.title || TSHORT[e.type] || e.type };
+  if (e.courseId) return { kind: 'locked', label: e.title || tname(e.type) };
+  return { kind: 'event', event: e, type: e.type, label: e.title || TSHORT[e.type] || tname(e.type) };
 }
 function rowAt(x, y) {
   const el = document.elementFromPoint(x, y), row = el && el.closest && el.closest('.g-row');
@@ -34,10 +34,12 @@ const personOf = row => P(row.querySelector('.g-lab').dataset.pk);
 /** Prüfung für die aktuelle Zielstelle. */
 function evaluate(spec, p, day) {
   if (spec.kind === 'seat') {
-    const c = spec.course, ds = Core.courseDayList(IX, c), f = Core.elementFor(S, IX, p, c.type);
-    const r = Core.checkPlacement(S, IX, { pk: p.pk, type: c.type, start: ds[0] ?? 0, len: ds.length, factors: f });
+    // bei Modulen belegt die Person nur die Tage der Module, die sie braucht
+    const c = spec.course, ds = Core.memberDayList(IX, c, p), f = Core.elementFor(S, IX, p, c.type);
+    const r = Core.checkPlacement(S, IX, { pk: p.pk, type: c.type, start: ds[0] ?? 0, len: ds.length, factors: f, ...(Core.hasModules(c) ? { days: ds } : {}) });
     const a = Core.assessCourse(S, IX, c, [p.pk], { group: 'all' }), extra = a.issues.filter(i => i.cat === 'Platzzahl' || i.cat === 'Reihenfolge im Ausbildungsweg' || i.cat === 'Lehrgang').map(i => i.cat === 'Lehrgang' ? 'alle Plätze belegt' : i.cat);
     if (Core.courseMembers(S, c.id).some(e => e.pk === p.pk)) extra.push('nimmt bereits teil');
+    if (!ds.length && Core.hasModules(c)) extra.push('keines der benötigten Module findet statt');
     return { ...r, ok: r.ok && !extra.length, extra, factors: f };
   }
   if (spec.kind === 'event') {

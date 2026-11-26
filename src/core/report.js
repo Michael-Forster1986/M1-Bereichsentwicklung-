@@ -1,10 +1,12 @@
 import { ABS_TYPES, CLUSTERS, EPS, PATTERNS, PREP } from './constants.js';
 import { kArea, kShift, num } from './util.js';
-import { isoWeek } from './dates.js';
+import { fmtShort, isoWeek } from './dates.js';
 import { buildIndex, capInfo } from './indexing.js';
 import { findConflicts } from './conflicts.js';
 import { courseDayList, courseMembers } from './courses.js';
+import { hasModules, isPartial, memberModules, moduleName, moduleText } from './modules.js';
 import { routeProgress, summarize } from './summary.js';
+import { labelOf } from './measures.js';
 
 // ---------- Berichte: Kennzahlen und Tabellen für Excel und PDF ----------------
 export const REPORT_LABELS = { planned: 'Neu geplant', kept: 'Durch fixierte Termine abgedeckt', partial: 'Teilweise geplant', open: 'Offen', blocked: 'Blockiert', skipped: 'Nicht geplant' };
@@ -132,18 +134,21 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
     { header: 'Beginn', width: 12, type: 'date' }, { header: 'Ende', width: 12, type: 'date' }, { header: 'Tage', width: 7, type: 'int' }, { header: 'Herkunft', width: 11 }, { header: 'Teilweg', width: 8 },
     { header: 'Teilnehmer', width: 11, type: 'dec' }, { header: 'Mentor', width: 8, type: 'dec' }, { header: 'TEC', width: 7, type: 'dec' }, { header: 'Prüfer', width: 8, type: 'dec' }, { header: 'Konflikt', width: 34 }, { header: 'Hinweis', width: 30 }],
   rows: evs.map(e => { const cf = confById.get(e.id), hard = cf ? cf.hard.map(h => h[0] + (h[1] > 1 ? ' (' + h[1] + ' Tage)' : '')).join(', ') : '';
-    return [...person(e.pk), e.type, e.title || '', e.start, e.end, (ix.evDays.get(e.id) || []).length, originOf(e), e.partial ? 'ja' : '', e.trainee, e.mentor, e.tec, e.examiner,
+    return [...person(e.pk), labelOf(st, e.type), e.title || '', e.start, e.end, (ix.evDays.get(e.id) || []).length, originOf(e), e.partial ? 'ja' : '', e.trainee, e.mentor, e.tec, e.examiner,
       { v: hard, fill: hard ? 'crit' : '' }, cf ? cf.soft.map(h => h[0] + ' (' + h[1] + ')').join(', ') : '']; }) });
 
   // Lehrgänge: je Teilnehmer eine Zeile; Lehrgänge ohne Teilnehmer stehen mit leerer Person
   const courseRows = [];
   for (const c of st.courses || []) {
-    const m = courseMembers(st, c.id), base = [c.title, c.type, c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length];
-    if (!m.length) courseRows.push([...base, '', '', '']);
-    for (const e of m) { const cf = confById.get(e.id); courseRows.push([...base, ...person(e.pk), { v: cf && cf.hard.length ? cf.hard.map(h => h[0]).join(', ') : '', fill: cf && cf.hard.length ? 'crit' : '' }]); }
+    const m = courseMembers(st, c.id), base = [c.title, labelOf(st, c.type), c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length];
+    // Lehrgang mit Modulen: welche Module wann stattfinden – und je Teilnehmer, welche er belegt
+    const mods = hasModules(c) ? c.modules.map(x => moduleName(x.no) + (x.na ? ' N/A' : ' ' + fmtShort(x.start) + (x.end !== x.start ? '–' + fmtShort(x.end) : ''))).join('; ') : '';
+    if (!m.length) courseRows.push([...base, '', '', '', mods, '']);
+    for (const e of m) { const cf = confById.get(e.id), p = ix.people.get(e.pk); courseRows.push([...base, ...person(e.pk), { v: cf && cf.hard.length ? cf.hard.map(h => h[0]).join(', ') : '', fill: cf && cf.hard.length ? 'crit' : '' },
+      mods, mods ? (isPartial(c, p) ? 'Teilbeleger: ' + moduleText(memberModules(c, p)) : 'alle Module') : '']); }
   }
   add({ name: 'Lehrgänge', columns: [{ header: 'Lehrgang', width: 28 }, { header: 'Art', width: 16 }, { header: 'Zielmuster', width: 11 }, { header: 'Beginn', width: 12, type: 'date' }, { header: 'Ende', width: 12, type: 'date' },
-    { header: 'Lehrgangstage', width: 12, type: 'int' }, { header: 'Plätze', width: 8, type: 'int' }, { header: 'Teilnehmer', width: 11, type: 'int' }, { header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Konflikt', width: 30 }], rows: courseRows });
+    { header: 'Lehrgangstage', width: 12, type: 'int' }, { header: 'Plätze', width: 8, type: 'int' }, { header: 'Teilnehmer', width: 11, type: 'int' }, { header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Konflikt', width: 30 }, { header: 'Module des Lehrgangs', width: 44 }, { header: 'Belegte Module', width: 26 }], rows: courseRows });
 
   // Planungsergebnis
   const rep = st.report.slice().sort((a, b) => (REPORT_ORDER[a.status] ?? 9) - (REPORT_ORDER[b.status] ?? 9));
@@ -154,7 +159,7 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
   // Konflikte
   add({ name: 'Konflikte', columns: [{ header: privacy ? 'Pseudonym' : 'Personalnummer', width: 15, type: 'text' }, { header: 'Name', width: 26 }, { header: 'Maßnahme', width: 19 }, { header: 'Beginn', width: 12, type: 'date' },
     { header: 'Ende', width: 12, type: 'date' }, { header: 'Konflikt', width: 60, wrap: true }, { header: 'Hinweis', width: 40, wrap: true }],
-  rows: conf.map(c => [...person(c.pk), c.type, c.start, c.end, { v: c.hard.map(h => h[0] + ' (' + h[1] + ')').join(', '), fill: c.hard.length ? 'crit' : '' }, c.soft.map(h => h[0] + ' (' + h[1] + ')').join(', ')]) });
+  rows: conf.map(c => [...person(c.pk), labelOf(st, c.type), c.start, c.end, { v: c.hard.map(h => h[0] + ' (' + h[1] + ')').join(', '), fill: c.hard.length ? 'crit' : '' }, c.soft.map(h => h[0] + ' (' + h[1] + ')').join(', ')]) });
 
   // Tageskapazität
   const capRows = [];

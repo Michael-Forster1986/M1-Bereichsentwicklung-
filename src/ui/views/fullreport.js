@@ -1,7 +1,7 @@
 import * as Core from '../../core/index.js';
 import { isDesktop } from '../../platform/desktop.js';
 import { html, raw } from '../dom.js';
-import { DATA_CLASS, MONL, REPORT_STATUS, dayLabel, fmt, fmtS, nf, originOf, pill, sgn, tcls } from '../format.js';
+import { DATA_CLASS, MONL, REPORT_STATUS, dayLabel, fmt, fmtS, nf, originOf, pill, sgn, tcls, tname } from '../format.js';
 import { CONF, IX, PRJ, S, SUM, collator, nameOf, privacy, years } from '../state.js';
 import { VIEWS } from '../registry.js';
 import { areaKnown, capCells, capLegend, monthsRow } from './shared.js';
@@ -71,7 +71,7 @@ VIEWS.fullreport = {
 
       <section class="pb"><h2>5 · Konflikte in Terminen (${nf(conf.length)})</h2>
         ${conf.length ? html`<table class="tbl"><thead><tr><th>Person</th><th>Maßnahme</th><th>Zeitraum</th><th>Konflikt</th><th>Hinweis</th></tr></thead><tbody>
-          ${conf.map(c => html`<tr><td>${nameOf(c.pk)}</td><td><i class="sw ${tcls(c.type)}"></i> ${c.type}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td>${c.hard.map(([t, n]) => t + (n > 1 ? ' (' + n + ' Tage)' : '')).join(', ') || '–'}</td><td class="muted">${c.soft.map(([t, n]) => t + ' (' + n + ')').join(', ')}</td></tr>`)}</tbody></table>`
+          ${conf.map(c => html`<tr><td>${nameOf(c.pk)}</td><td><i class="sw ${tcls(c.type)}"></i> ${tname(c.type)}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td>${c.hard.map(([t, n]) => t + (n > 1 ? ' (' + n + ' Tage)' : '')).join(', ') || '–'}</td><td class="muted">${c.soft.map(([t, n]) => t + ' (' + n + ')').join(', ')}</td></tr>`)}</tbody></table>`
           : html`<div class="note good">Keine Konflikte: alle Termine liegen auf zulässigen Tagen.</div>`}</section>
 
       <section class="pb"><h2>6 · Planungsergebnis je Person (${nf(rep.length)})</h2>
@@ -81,11 +81,11 @@ VIEWS.fullreport = {
 
       ${S.courses.length ? html`<section class="pb"><h2>Lehrgänge (${nf(S.courses.length)})</h2>
         <table class="tbl"><thead><tr><th>Lehrgang</th><th>Art</th><th>Zeitraum</th><th class="n">Tage</th><th class="n">Teilnehmer</th><th>Wer</th></tr></thead><tbody>
-          ${S.courses.map(c => { const m = Core.courseMembers(S, c.id); return html`<tr><td><i class="sw ${tcls(c.type)}"></i> ${c.title}</td><td>${c.type}${c.target ? ' · ' + c.target : ''}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td class="n">${Core.courseDayList(IX, c).length}</td><td class="n">${m.length}${c.seats != null ? ' / ' + c.seats : ''}</td><td class="muted">${m.map(e => nameOf(e.pk)).sort(collator.compare).join(', ')}</td></tr>`; })}</tbody></table></section>` : ''}
+          ${S.courses.map(c => { const m = Core.courseMembers(S, c.id); return html`<tr><td><i class="sw ${tcls(c.type)}"></i> ${c.title}</td><td>${tname(c.type)}${c.target ? ' · ' + c.target : ''}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td class="n">${Core.courseDayList(IX, c).length}</td><td class="n">${m.length}${c.seats != null ? ' / ' + c.seats : ''}</td><td class="muted">${m.map(e => nameOf(e.pk)).sort(collator.compare).join(', ')}</td></tr>`; })}</tbody></table></section>` : ''}
 
       <section class="pb"><h2>7 · Terminliste (${nf(evs.length)})</h2>
         ${evs.length ? html`<table class="tbl"><thead><tr><th>Person</th><th>Maßnahme</th><th>Beginn</th><th>Ende</th><th class="n">Tage</th><th>Herkunft</th><th>Prüfung</th></tr></thead><tbody>
-          ${evs.map(e => { const cf = CONF.get(e.id), hard = cf && cf.hard.length; return html`<tr><td>${nameOf(e.pk)}</td><td><i class="sw ${tcls(e.type)}"></i> ${e.title ? e.title + ' · ' : ''}${e.type}${e.partial ? html` <span class="muted xs">Teilweg</span>` : ''}</td><td class="num nowrap">${fmt(e.start)}</td><td class="num nowrap">${fmt(e.end)}</td><td class="n">${(IX.evDays.get(e.id) || []).length}</td><td class="muted">${originOf(e)}</td><td>${hard ? html`<span style="color:var(--crit-ink)">${cf.hard.map(h => h[0]).join(', ')}</span>` : cf ? html`<span class="muted">${cf.soft.map(h => h[0]).join(', ')}</span>` : html`<span class="muted">ohne Befund</span>`}</td></tr>`; })}</tbody></table>`
+          ${evs.map(e => { const cf = CONF.get(e.id), hard = cf && cf.hard.length; return html`<tr><td>${nameOf(e.pk)}</td><td><i class="sw ${tcls(e.type)}"></i> ${e.title ? e.title + ' · ' : ''}${tname(e.type)}${e.partial ? html` <span class="muted xs">Teilweg</span>` : ''}</td><td class="num nowrap">${fmt(e.start)}</td><td class="num nowrap">${fmt(e.end)}</td><td class="n">${(IX.evDays.get(e.id) || []).length}</td><td class="muted">${originOf(e)}</td><td>${hard ? html`<span style="color:var(--crit-ink)">${cf.hard.map(h => h[0]).join(', ')}</span>` : cf ? html`<span class="muted">${cf.soft.map(h => h[0]).join(', ')}</span>` : html`<span class="muted">ohne Befund</span>`}</td></tr>`; })}</tbody></table>`
           : html`<div class="note">Noch keine Termine.</div>`}</section>
 
       <section><h2>8 · Annahmen und Grenzen</h2>

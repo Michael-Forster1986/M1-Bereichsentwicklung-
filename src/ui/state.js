@@ -18,7 +18,7 @@ export const UI = {
   capArea: 0, capRange: 'year', capOnlyCrit: true, evQ: '', evType: '', evOrigin: '', repStatus: '', absQ: '',
   routeCluster: '1', routePerson: '', drawer: null, tec: null, tecResult: null, limit: 300
 };
-export const LS = { state: 'm1cockpit.v4.state', project: 'm1cockpit.v5.project', on: 'm1cockpit.v4.autosave', theme: 'm1cockpit.theme', practice: 'm1cockpit.practice' };
+export const LS = { state: 'm1cockpit.v4.state', project: 'm1cockpit.v5.project', on: 'm1cockpit.v4.autosave', theme: 'm1cockpit.theme', practice: 'm1cockpit.practice', drawerWide: 'm1cockpit.drawerWide' };
 export const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },

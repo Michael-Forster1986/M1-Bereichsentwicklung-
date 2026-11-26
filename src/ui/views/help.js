@@ -76,7 +76,17 @@ VIEWS.help = {
           ${step(6, 'Nacharbeiten', html`Im Jahresplan einzelne Elemente mit der Maus verschieben oder neu hineinziehen; das Programm prüft sofort die Kapazität. ${go('year', 'Jahresplan')}`)}
           ${step(7, 'Prüfen, speichern, weitergeben', html`Bericht ansehen, ${isDesktop ? html`mit ${kbd('Strg', 'S')} speichern` : 'Projektdatei sichern'}, Gesamtbericht als PDF oder die Excel-Arbeitsmappe ausgeben. ${go('report', 'Bericht')}`)}
         </ol>
-        <div class="note">Der <b>Dienstplan</b> darf vorerst fehlen: Dann gilt für jede Person ihr Dienst aus den Stammdaten, und die Kapazität ist eine Näherung. Sobald der echte Dienstplan vorliegt, spielen Sie ihn unter „Daten & Datenschutz“ ein – am Vorgehen ändert sich nichts.</div></section>
+        <h3>Dienstplan eintragen</h3>
+        <p>In einem neuen Projekt gilt jeder Tag als <b>frei</b>, bis ein Dienst eingetragen ist. Ohne Dienste kann der Planer nichts verteilen. Es gibt zwei Wege:</p>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Weg</th><th>So geht es</th></tr></thead><tbody>
+          <tr><td><b>Als Excel einspielen</b></td><td>Unter ${go('data', 'Daten & Datenschutz')} die Karte „Dienstplan“: Liste oder Tabelle mit einer Zeile je Person und einer Spalte je Tag (F, S, N, Frei). Gilt für alle Personen der Datei.</td></tr>
+          <tr><td><b>Je Person von Hand</b></td><td>Person anklicken – die Seitenleiste öffnet sich. <b>„Dienstplan bearbeiten“</b> zeigt sie groß und blendet die Werkzeuge ein.</td></tr></tbody></table></div>
+        <div class="tblwrap" style="margin-top:8px"><table class="tbl"><thead><tr><th>Werkzeug in der Seitenleiste</th><th>Wirkung</th></tr></thead><tbody>
+          <tr><td><b>Eintragen</b></td><td>Dienst (Früh, Spät, Nacht, Frei) und Bereich wählen, dann einen Tag anklicken. Von einem Tag zum anderen ziehen trägt den Zeitraum dazwischen ein – an den gewählten Wochentagen.</td></tr>
+          <tr><td><b>Zeitraum füllen</b></td><td>Trägt den gewählten Dienst von–bis an den gewählten Wochentagen ein, z. B. das ganze Jahr Mo–Fr Früh.</td></tr>
+          <tr><td><b>Wochenfolge</b></td><td>Der Dienst wechselt wochenweise, z. B. Früh → Spät → Nacht. Die Woche des Startdatums ist Woche 1; übrige Tage des Zeitraums werden frei.</td></tr>
+          <tr><td><b>Übernehmen / Übertragen</b></td><td>Den Dienstplan einer anderen Person übernehmen – oder den eigenen auf alle mit gleichem Bereich und Dienst, auf den Cluster oder auf alle übertragen.</td></tr></tbody></table></div>
+        <div class="note">Jede Aktion ist ein Schritt für „Rückgängig“. Wer Tage ohne Eintrag lieber mit dem Dienst aus den Stammdaten rechnen lässt, schaltet das unter ${go('capacity', 'Kapazität')} in den Einstellungen um; im Kalender erscheinen solche Tage blass.</div></section>
 
       <section class="card" id="h-urlaub"><h2>3 · Urlaubsplan einspielen</h2>
         <p>Erwartet wird die übliche Excel-Tabelle: <b>eine Zeile je Person, eine Spalte je Tag</b>, in den Zellen Kürzel. Vorn steht die Personalnummer oder der Name.</p>
@@ -99,7 +109,17 @@ VIEWS.help = {
         </div>
         <h3>Feste Termine einspielen</h3>
         <p>Über <b>„Lehrgangstermine einspielen“</b> laden Sie eine CSV- oder Excel-Liste mit den Spalten <code>Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze</code>. Steht zusätzlich eine Spalte mit der Personalnummer in der Liste, wird je Zeile ein Teilnehmer eingetragen. Als Art gelten „TEC“ und „CAT A“ als Theorie, „CAT Praxis“ als Praxis. Eine leere Vorlage liefert die Schaltfläche daneben.</p>
+        <p><b>Welche Arten es gibt,</b> legen Sie unter ${go('routes', 'Ausbildungswege')} in der Tabelle „Schritte und Dienste“ fest: vorhandene Arten umbenennen oder eigene anlegen (Art „Lehrgang“). Im Dialog „Lehrgang anlegen“ wählen Sie nur aus.</p>
         <p><b>Für wen ein Lehrgang gilt,</b> bestimmt das Zielmuster: Ein Lehrgang <i>mit</i> Zielmuster (z. B. A330) ist ein TEC-Lehrgang für Cluster 5 mit genau diesem Muster. Ein Lehrgang <i>ohne</i> Zielmuster gehört zum CAT-A-Kursrahmen der übrigen Cluster. So setzt der Planer niemanden in den Lehrgang einer anderen Gruppe.</p>
+        <h3>Basic Knowledge: Module und Teilbeleger</h3>
+        <p>Ein Lehrgang der Art <b>Basic Knowledge</b> besteht aus den Modulen M1 bis M${Core.MODULE_COUNT}. Beim Anlegen entscheidet das Kästchen <b>„Teilbeleger dabei“</b>:</p>
+        <div class="tblwrap"><table class="tbl"><thead><tr><th>Teilbeleger</th><th>Was Sie eintragen</th><th>Was im Jahresplan steht</th></tr></thead><tbody>
+          <tr><td><b>nein</b></td><td>Nur Beginn und Ende des Lehrgangs. Die Module müssen nicht einzeln festgelegt werden.</td><td>Ein Balken je Teilnehmer über den ganzen Zeitraum.</td></tr>
+          <tr><td><b>ja</b></td><td>Jedes Modul einzeln: Beginn und Ende – oder <b>N/A</b>, wenn das Modul in diesem Lehrgang nicht stattfindet. Beginn und Ende des Lehrgangs ergeben sich aus den Modulen.</td><td>Ein Abschnitt je Modul (M1, M2 …). Teilbeleger haben nur die Abschnitte ihrer Module; an den übrigen Tagen stehen sie der Produktion zur Verfügung.</td></tr></tbody></table></div>
+        <ul class="h-list" style="margin-top:10px"><li><b>Wer welche Module belegt,</b> stellen Sie im Lehrgang beim Teilnehmer über „Module“ ein – oder schon vorher in der Seitenleiste der Person („Module wählen“). Gespeichert wird bei der Person, welche Module sie braucht; das gilt auch für spätere Lehrgänge.</li>
+          <li><b>Module ändern:</b> „Module bearbeiten“ im Lehrgang. Die Termine der Teilnehmer folgen; wer danach kein Modul mehr hat, wird ausgetragen und gemeldet.</li>
+          <li>„Neu berechnen“ vergibt Plätze modulgenau: Ein Teilbeleger ist nach seinem letzten Modul frei für den nächsten Schritt.</li>
+          <li>Die Abschnitte sind im Jahresplan ab der Ansicht „Quartal“ beschriftet; in der Excel-Arbeitsmappe stehen die Module je Lehrgang und je Teilnehmer.</li></ul>
         <h3>Beste Zeiträume berechnen</h3>
         <p>Für jeden möglichen Starttag prüft das Programm: <i>Wer kann teilnehmen, ohne dass an irgendeinem Lehrgangstag die Grenze der Produktion unterschritten wird?</i> Berücksichtigt werden Urlaub, bestehende Termine, die Reihenfolge im Ausbildungsweg (Praxis erst nach Theorie) und die Kranken- und Stressreserve. Es wählt den Zeitraum mit der größten Gruppe, merkt ihn vor und plant die übrigen Personen in weiteren Lehrgängen – so lange, bis alle untergebracht sind oder keine Gruppe mehr die Mindestgröße erreicht.</p>
         <ul class="h-list"><li><b>Plätze je Lehrgang</b> und <b>Mindestgröße</b> bestimmen, wie viele Lehrgänge entstehen.</li>
@@ -116,13 +136,14 @@ VIEWS.help = {
           <li>Jede Maßnahme liegt nur in den Diensten, die für sie zugelassen sind. Vorgabe: Logbook in jedem Dienst, alles andere nur im Frühdienst – einstellbar unter ${go('routes', 'Ausbildungswege')}.</li>
           <li>Die Schritte eines Wegs werden in der dort festgelegten Reihenfolge geplant.</li>
           <li>Lehrgänge: der Planer vergibt freie Plätze in den vorhandenen Lehrgängen. Gibt es keinen passenden Termin, bleibt der Schritt offen und der Bericht nennt den Grund.</li>
-          <li>Die ICA liegt nach allen Kursen und nach dem Abschluss aller Doings; ein Tag Vorbereitung davor bindet nur Prüfer oder TEC.</li>
+          <li>Die ICA liegt nach allen Kursen und nach dem Abschluss aller Doings; ein Tag Vorbereitung davor bindet nur Prüfer oder TEC. Der Vorbereitungstag ist eine Regel und lässt sich unter ${go('routes', 'Ausbildungswege')} abschalten.</li>
           <li>Planungspriorität 1 kommt zuerst. Innerhalb gleicher Priorität vergleicht das Programm viele Reihenfolgen und nimmt die beste.</li>
           <li>Mit „0-Punkt bevorzugen“ plant es zuerst nur auf Tagen ab der Sollbesetzung und geht erst bei Bedarf bis zum Minimum.</li></ul>
         <p>Das Ergebnis erscheint als Vorher/Nachher-Vergleich. Was nicht planbar war, steht mit Begründung im ${go('report', 'Bericht')}.</p></section>
 
       <section class="card" id="h-ziehen"><h2>6 · Jahresplan: Ziehen und Ablegen</h2>
         <p>Im Jahresplan hat jede Person eine Zeile, jede Maßnahme einen Balken. Über dem Plan liegt die Leiste <b>„Ziehen und Ablegen“</b>.</p>
+        <p><b>Zeitraum wählen:</b> Jahr, Halbjahr, Quartal, Monat oder 2 Wochen. Ab der Ansicht „Monat“ steht über dem Plan jeder einzelne Tag mit Wochentag und Datum. ${kbd('Strg')} und Mausrad zoomt stufenweise hinein und heraus; die Stelle unter dem Mauszeiger bleibt dabei stehen.</p>
         <div class="h-grid">
           <div class="h-tile"><b>Neues Element</b><p>Logbook, FitCheck oder ICA aus der Leiste auf die Zeile einer Person ziehen. Dauer und Betreuung kommen aus ihrem Ausbildungsweg.</p></div>
           <div class="h-tile"><b>Balken verschieben</b><p>Einen vorhandenen Balken mit gedrückter Maustaste nach links oder rechts ziehen. Er wird dabei fixiert.</p></div>
@@ -149,20 +170,24 @@ VIEWS.help = {
       <section class="card" id="h-wege"><h2>8 · Cluster und Ausbildungswege</h2>
         <p>Jede Person gehört zu einem Cluster. Der Cluster bestimmt den Ausbildungsweg: eine Folge von Schritten mit Dauer und dem, was der Produktion an einem solchen Tag fehlt.</p>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Cluster</th><th>Bedeutung</th><th>Weg in der Vorgabe</th></tr></thead><tbody>
-          ${Core.ROUTE_CLUSTERS.map(k => html`<tr><td><b>${k}</b></td><td>${Core.CLUSTERS[k]}</td><td>${Core.DEFAULT_ROUTES[k].map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}${k === '5' ? html`<br><span class="muted">Zielstufe TEC:</span> ${sw('Theorie')} Theorie → ${sw('Praxis')} Praxis` : ''}${['3', '4B'].includes(k) ? html`<br><span class="muted">Voraussetzung: Praxis-Lehrgang</span>` : ''}</td></tr>`)}
+          ${Core.ROUTE_CLUSTERS.map(k => html`<tr><td><b>${k}</b></td><td>${Core.CLUSTERS[k]}</td><td>${Core.DEFAULT_ROUTES[k].map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}${k === '5' ? html`<br><span class="muted">Zielstufe TEC:</span> ${Core.DEFAULT_RULES.tecRoute.map((t, i) => html`${i ? ' → ' : ''}${sw(t)} ${t}`)}` : ''}${Core.DEFAULT_RULES.frame.includes(k) ? html`<br><span class="muted">Voraussetzung: Praxis-Lehrgang</span>` : ''}</td></tr>`)}
           <tr><td><b>offen</b></td><td>${Core.CLUSTERS.offen}</td><td class="muted">wird nicht geplant, zählt aber in der Kapazität</td></tr>
           <tr><td><b>ausgeschlossen</b></td><td>${Core.CLUSTERS.ausgeschlossen}</td><td class="muted">keine neuen Maßnahmen</td></tr></tbody></table></div>
         <ul class="h-list" style="margin-top:10px"><li>Cluster, Zielmuster und Zielstufe ändern Sie unter ${go('people', 'Personen & Cluster')} – oder Sie spielen eine Liste ein, die nur Personalnummer und Cluster enthält.</li>
           <li>Dauer und Verlust je Schritt stellen Sie unter ${go('routes', 'Ausbildungswege')} ein: für den ganzen Cluster oder abweichend für eine einzelne Person.</li>
           <li><b>Vorleistung:</b> Hat jemand einen Teil schon erbracht, tragen Sie die Tage in der Seitenleiste der Person ein. Der Planer verteilt dann nur den Rest.</li>
-          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul>
-        <h3>Reihenfolge, eigene Schritte und Dienste</h3>
+          <li>Cluster 5 braucht Zielmuster und Zielstufe; Cluster 3 und 4B brauchen in der Vorgabe den Praxis-Lehrgang oder das Datum „Abschluss aller Doings“.</li></ul>
+        <h3>Reihenfolge, Schritte, Dienste und Regeln</h3>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Was</th><th>Wie</th></tr></thead><tbody>
           <tr><td><b>Reihenfolge ändern</b></td><td>Unter ${go('routes', 'Ausbildungswege')} eine Schrittkarte am Kopf greifen und an die neue Stelle ziehen – oder die Pfeile ◀ ▶ auf der Karte nutzen. Der Planer hält die Reihenfolge ein.</td></tr>
           <tr><td><b>Eigenen Schritt anlegen</b></td><td>„Neuen Schritt anlegen“: Bezeichnung, Kürzel, Farbe, Art (einzeln im Dienst oder Lehrgang als Block), zulässige Dienste, Dauer und Verlust. Der Schritt steht danach allen Clustern zur Auswahl.</td></tr>
           <tr><td><b>Dienste je Maßnahme</b></td><td>In der Tabelle „Schritte und Dienste“ je Maßnahme ankreuzen, ob sie im Früh-, Spät- oder Nachtdienst stattfinden darf. Mindestens ein Dienst bleibt immer zugelassen.</td></tr>
-          <tr><td><b>Schritt entfernen</b></td><td>Eigene Schritte lassen sich entfernen, solange es keine Termine oder Lehrgänge dazu gibt.</td></tr></tbody></table></div>
-        <div class="note">Nach jeder Änderung an Reihenfolge, Schritten oder Diensten verteilt erst „Neu berechnen“ die berechneten Termine neu. Fixierte Termine bleiben stehen; liegen sie außerhalb der zugelassenen Dienste, steht das als Konflikt im Bericht.</div></section>
+          <tr><td><b>In den Jahresplan übernehmen</b></td><td>Ein geänderter Weg steht erst nach der Übernahme im Jahresplan. Über dem Ablauf zeigt eine Zeile, was vom Weg im Jahresplan steht; nach einer Änderung ist sie gelb. <b>„In den Jahresplan übernehmen“</b> verteilt nur die berechneten Termine der gewählten Person – oder der Personen des gewählten Clusters – neu. Fixierte Termine und alle anderen Personen bleiben unverändert. ${kbd('Strg', 'Z')} nimmt die Übernahme zurück.</td></tr>
+          <tr><td><b>Schritt ändern</b></td><td>„Ändern“ in der Tabelle „Schritte und Dienste“ – auch bei den vorgegebenen Schritten (Theorie, Praxis, Logbook, FitCheck …): Bezeichnung, Kürzel, Farbe, zulässige Dienste und, solange es noch keine Termine gibt, die Art. „Auf Vorgabe zurücksetzen“ stellt den Schritt wieder her. Bei Vorbereitung und ICA steht die Art fest.</td></tr>
+          <tr><td><b>Schritt entfernen</b></td><td>Eigene Schritte lassen sich entfernen, solange es keine Termine oder Lehrgänge dazu gibt.</td></tr>
+          <tr><td><b>Regeln der Planung</b></td><td>In der Karte „Regeln der Planung“: für welche Cluster der Praxis-Lehrgang Voraussetzung ist, ob A320 zurückgestellt wird, ob der Kombikurs nur für die Zielstufe TEC gilt und ob vor der ICA automatisch ein Vorbereitungstag liegt. „Regeln auf Vorgabe setzen“ stellt alles wieder her.</td></tr>
+          <tr><td><b>Weg für die Zielstufe TEC</b></td><td>Cluster 5 anklicken: Unter dem Weg des Clusters steht der Weg für Personen mit Zielstufe TEC. Er lässt sich wie jeder Weg ändern – Schritte hinzufügen, entfernen, verschieben.</td></tr></tbody></table></div>
+        <div class="note">Änderungen an einem einzelnen Weg übernehmen Sie mit „In den Jahresplan übernehmen“. Nach Änderungen an Schritten, Diensten oder Regeln – sie betreffen alle Wege – verteilt „Neu berechnen“ die berechneten Termine neu. Fixierte Termine bleiben stehen; liegen sie außerhalb der zugelassenen Dienste, steht das als Konflikt im Bericht.</div></section>
 
       <section class="card" id="h-jahre"><h2>9 · Mehrere Planungsjahre</h2>
         <p>Ein Projekt kann mehrere Planungsjahre enthalten; gewechselt wird in der Kopfzeile (aktuell ${y}). <b>„Folgejahr anlegen“</b> übernimmt Personen, Ausbildungswege, Grenzwerte und Einstellungen.</p>
@@ -228,6 +253,7 @@ VIEWS.help = {
           ${term('Lehrgang', 'Zusammenhängender Block für eine Gruppe mit Zeitraum und Plätzen: Theorie, Praxis, Basic Knowledge, FG650.')}
           ${term('Practical Logbook', 'Praktische Ausbildung im laufenden Dienst, tageweise mit Mentor.')}
           ${term('FitCheck / ICA', 'Prüfungsschritte; in der Vorgabe nur im Frühdienst. Vor der ICA liegt ein Tag Vorbereitung für Prüfer oder TEC.')}
+          ${term('Dienstplan', 'Je Person und Tag: Früh, Spät, Nacht in einem Bereich – oder frei. Ohne Eintrag gilt ein Tag in neuen Projekten als frei.')}
           ${term('Übungsmodus', 'Füllt das leere Programm mit simulierten Daten zum Einarbeiten. Ein- und ausschaltbar unter „Daten & Datenschutz“.')}
           ${term('Eigener Schritt', 'Eine selbst angelegte Maßnahme im Ausbildungsweg – einzeln im Dienst oder als Lehrgang.')}
           ${term('Kapazitätstag', 'Ein Kopf, der der Produktion einen Tag lang fehlt. Mentor 0,5 an 10 Tagen = 5 Kapazitätstage.')}

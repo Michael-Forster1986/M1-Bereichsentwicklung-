@@ -26,7 +26,7 @@ export async function practiceStop() {
   if (!practiceOn() && S.meta.dataClass !== 'demo') return render();
   setPractice(false);
   if (S.meta.dataClass !== 'demo') return render();                    // es liegt bereits ein eigenes Projekt im Fenster
-  replaceState(Core.emptyState(Core.planningYear()), 'Übungsmodus beendet – das Programm ist leer. Spielen Sie Ihre Daten ein oder öffnen Sie Ihr Projekt.');
+  replaceState(Core.newProjectState(Core.planningYear()), 'Übungsmodus beendet – das Programm ist leer. Spielen Sie Ihre Daten ein oder öffnen Sie Ihr Projekt.');
   go('overview');
 }
 ACT['practice-on'] = () => practiceStart();
@@ -43,7 +43,7 @@ export function practiceCard() {
       <label class="c"><input type="checkbox" data-chg="practice" ${on ? raw('checked') : ''}> <span><b>Simulierte Daten zum Einarbeiten</b></span></label></div>
     <div class="sub" style="color:var(--ink-2);font-size:12.5px;margin:4px 0 0">${on
     ? 'Das Fenster zeigt erfundene Personen mit Dienstplan, Urlaub, Lehrgängen und berechnetem Jahresplan – zum gefahrlosen Ausprobieren aller Funktionen. Ausschalten leert das Programm; danach spielen Sie Ihre eigenen Daten ein oder öffnen Ihr Projekt.'
-    : 'Im Normalbetrieb startet das Programm leer. Ihre Daten spielen Sie einzeln ein (Personen, Urlaubsplan, Lehrgänge, Dienstplan) oder öffnen ein gespeichertes Projekt. Zum Einarbeiten füllt der Übungsmodus das Fenster mit simulierten Daten; die Einstellung bleibt bis zum Ausschalten gespeichert.'}</div></div>`;
+    : 'Im Normalbetrieb startet das Programm leer. Ihre Daten spielen Sie einzeln ein (Personen, Dienstplan, Urlaubsplan, Lehrgänge) oder öffnen ein gespeichertes Projekt. Zum Einarbeiten füllt der Übungsmodus das Fenster mit simulierten Daten; die Einstellung bleibt bis zum Ausschalten gespeichert.'}</div></div>`;
 }
 /** Leerer Normalbetrieb: führt durch das Einspielen der einzelnen Daten und bietet den Übungsmodus an. */
 export function emptyStart() {
@@ -55,7 +55,7 @@ export function emptyStart() {
           ${step(1, 'Personen & Cluster', 'Stammdaten als CSV oder Excel: Personalnummer, Name, Bereich, Dienst, Cluster, Qualifikationen.')}
           ${step(2, 'Urlaubsplan', 'Excel-Tabelle mit einer Zeile je Person und einer Spalte je Tag; die Kürzel ordnen Sie beim Einspielen zu.')}
           ${step(3, 'Lehrgangstermine', 'Feste Termine einspielen; für den übrigen Bedarf berechnet das Programm die besten Zeiträume.')}
-          ${step(4, 'Dienstplan', 'Sobald er vorliegt. Bis dahin gilt für jede Person ihr Dienst aus den Stammdaten.')}
+          ${step(4, 'Dienstplan', 'Als Excel einspielen oder je Person in ihrer Seitenleiste eintragen. Ohne Eintrag gilt ein Tag als frei.')}
           ${step(5, 'Neu berechnen', 'Verteilt die Ausbildungswege auf zulässige Tage und prüft jeden Tag gegen die Grenze der Produktion.')}</ul>
         <div class="row" style="margin-top:12px"><button class="btn primary" data-act="go" data-id="data">Daten einspielen</button><button class="btn" data-act="load-project">Projekt öffnen</button></div></div>
       <div class="card"><h3>Erst einmal ausprobieren?</h3><div class="sub">Übungsmodus mit simulierten Daten</div>

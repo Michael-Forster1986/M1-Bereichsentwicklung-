@@ -1,5 +1,5 @@
 import { ABS_TYPES, AREAS, COURSE_TYPES, PATTERNS, PREP, SHIFTS, TARGETS } from './constants.js';
-import { courseTypesOf, typesOf } from './measures.js';
+import { courseTypesOf, labelOf, typesOf } from './measures.js';
 import { clamp, num, truthy, uid } from './util.js';
 import { addDays, fmtDE, makeCalendar, normDate } from './dates.js';
 import { assignAliases, normPerson, parseCluster, normShift } from './people.js';
@@ -176,7 +176,8 @@ export function checkEvents(st, objs, head) {
     if (!pk) return;
     if (!known.has(pk)) return errors.push(line + 'unbekannte Personalnummer');
     if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
-    const type = [...typesOf(st), 'Sonstiges'].find(t => t.toLowerCase() === String(r.type).trim().toLowerCase());
+    const want = String(r.type).trim().toLowerCase(), kinds = [...typesOf(st), 'Sonstiges'];
+    const type = kinds.find(t => t.toLowerCase() === want) || kinds.find(t => labelOf(st, t).toLowerCase() === want);      // Name oder angezeigte Bezeichnung
     if (!type) return errors.push(line + 'Maßnahme unbekannt (' + r.type + ')');
     const f = (k, def) => { const v = String(r[k] ?? '').trim(); return v === '' ? def : clamp(num(v.replace(',', '.')), 0, 5); };
     rows.push({ id: uid(), pk, type, title: String(r.title || '').trim() || undefined, start: s, end: e, auto: false,
@@ -190,7 +191,7 @@ export function checkEvents(st, objs, head) {
 export function courseTypeOf(text, st = null) {
   const s = normHead(text);
   if (!s) return '';
-  for (const t of st ? courseTypesOf(st) : COURSE_TYPES) if (normHead(t) === s) return t;
+  for (const t of st ? courseTypesOf(st) : COURSE_TYPES) if (normHead(t) === s || (st && normHead(labelOf(st, t)) === s)) return t;
   if (s.includes('prax') || s.includes('practical')) return 'Praxis';
   if (s.includes('basic') || s === 'bk') return 'Basic Knowledge';
   if (s.includes('fg650')) return 'FG650';

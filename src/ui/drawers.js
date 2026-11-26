@@ -1,12 +1,13 @@
 import * as Core from '../core/index.js';
 import { $, html, raw, setHTML } from './dom.js';
-import { MON, REPORT_STATUS, ROUTE_STATE, TSHORT, clusterLabel, dayLabel, fmt, fmtS, nf, opts, originOf, pill, sgn, tcls } from './format.js';
+import { MON, REPORT_STATUS, ROUTE_STATE, TSHORT, clusterLabel, dayLabel, fmt, fmtS, nf, opts, originOf, pill, sgn, tcls, tname, typeOpts } from './format.js';
 import { CONF, IX, P, PROG, S, UI, collator, commit, nameOf, pName, pidOf, privacy, sortKey } from './state.js';
 import { closeDrawer, closeModal, confirmDlg, openDrawer, openModal, toast } from './dialogs.js';
 import { ACT, CHG, TIP } from './registry.js';
 import { go, render } from './shell.js';
 import { EPS, dayFlags } from './views/shared.js';
 import { personMeta } from './views/year.js';
+import { drawerWide, rosterDefaultNote, rosterEditing, rosterTools } from './roster-edit.js';
 
 /* ==========================================================================
  * Seitenleisten · Person, Termin, Tag
@@ -22,6 +23,7 @@ export function renderDrawer() {
   else if (spec.kind === 'day') out = drawerDay(Core.clamp(spec.d, 0, IX.n - 1));
   if (!out) return closeDrawer();
   setHTML(d, html`<header><h2>${out.title}</h2>${out.head || ''}<button class="btn ghost sm" data-act="drawer-close" aria-label="Schließen">✕</button></header><div class="body">${out.body}</div>`);
+  d.classList.toggle('wide', spec.kind === 'person' && drawerWide());
   drawerKey = JSON.stringify(spec);
   if (sameKey) $('.body', d).scrollTop = keep;
 }
@@ -30,14 +32,15 @@ ACT['drawer-close'] = closeDrawer;
 // ---------- Person ------------------------------------------------------------
 function personCalendar(p) {
   const i = IX.pi.get(p.pk), cal = IX.cal; let s = '<span></span>';
-  for (let dd = 1; dd <= 31; dd++) s += '<span class="dh">' + (dd % 5 === 0 || dd === 1 ? dd : '') + '</span>';
+  for (let dd = 1; dd <= 31; dd++) s += '<span class="dh' + (dd % 5 === 0 || dd === 1 ? '' : ' minor') + '">' + dd + '</span>';
   for (let m = 0; m < 12; m++) {
     s += '<span class="mh">' + MON[m] + '</span>';
     const len = cal.monthStart[m + 1] - cal.monthStart[m];
     for (let dd = 0; dd < 31; dd++) {
       if (dd >= len) { s += '<i class="none"></i>'; continue; }
       const d = cal.monthStart[m] + dd, k = Core.assign(IX, i, d), ev = IX.evByDay[d].find(e => e.pk === p.pk && e.type !== Core.PREP) || IX.evByDay[d].find(e => e.pk === p.pk);
-      s += '<i class="' + (k >= 0 ? 's-' + (k % 3) : 'free') + (cal.dow[d] === 0 || cal.dow[d] === 6 ? ' wk' : '') + (IX.abs[i][d] ? ' ab' : '') + '" data-tk="pday" data-d="' + d + '">' + (ev ? '<em class="' + tcls(ev.type) + '"></em>' : '') + '</i>';
+      // fb = Dienst ist nicht eingetragen, sondern aus den Stammdaten angenommen; der Buchstabe erscheint in der großen Ansicht
+      s += '<i class="' + (k >= 0 ? 's-' + (k % 3) : 'free') + (k >= 0 && IX.ros[i][d] < 2 ? ' fb' : '') + (cal.dow[d] === 0 || cal.dow[d] === 6 ? ' wk' : '') + (IX.abs[i][d] ? ' ab' : '') + '" data-tk="pday" data-d="' + d + '">' + (k >= 0 ? '<b>' + 'FSN'[k % 3] + '</b>' : '') + (ev ? '<em class="' + tcls(ev.type) + '"></em>' : '') + '</i>';
     }
   }
   return raw(s);
@@ -46,7 +49,7 @@ TIP.pday = t => {
   const sp = UI.drawer; if (!sp || sp.kind !== 'person') return null;
   const d = +t.dataset.d, i = IX.pi.get(sp.pk), k = Core.assign(IX, i, d), code = IX.ros[i][d], evs = IX.evByDay[d].filter(e => e.pk === sp.pk);
   return html`<b>${dayLabel(d)}</b> <span class="k">${dayFlags(d)}</span><br>${k >= 0 ? Core.kArea(k) + ' · ' + Core.kShift(k) + (code < 2 ? ' (Szenariozuordnung)' : '') : code === 1 ? 'Frei' : 'Kein Dienst eingetragen'}
-    ${IX.abs[i][d] ? html`<br>Abwesend: ${Core.ABS_TYPES[IX.abs[i][d] - 1]}` : ''}${evs.map(e => html`<br><span class="key ${tcls(e.type)}"></span>${e.title || e.type} <span class="k">${originOf(e)}</span>`)}`;
+    ${IX.abs[i][d] ? html`<br>Abwesend: ${Core.ABS_TYPES[IX.abs[i][d] - 1]}` : ''}${evs.map(e => html`<br><span class="key ${tcls(e.type)}"></span>${e.title || tname(e.type)} <span class="k">${originOf(e)}</span>`)}`;
 };
 function drawerPerson(p) {
   const pr = PROG.get(p.pk), evs = (IX.evByPerson.get(p.pk) || []).slice().sort((a, b) => a.start < b.start ? -1 : 1), rep = S.report.find(r => r.pk === p.pk);
@@ -54,21 +57,25 @@ function drawerPerson(p) {
   for (let d = 0; d < IX.n; d++) { if (IX.ros[i][d] >= 2) { duty++; if (IX.abs[i][d]) vac++; } }
   const route = Core.routeOf(S, p), rot = p.rotation || [0, 0, 0];
   const sel = (f, list, v, extra = '') => html`<select data-chg="person" data-pk="${p.alias}" data-f="${f}" ${raw(extra)}>${opts(list, v)}</select>`;
-  return { title: pName(p), body: html`
+  const edit = rosterEditing(), wide = drawerWide();
+  return { title: pName(p), head: html`<button class="btn sm" data-act="drawer-size" aria-pressed="${wide}" data-tip="${wide ? 'Seitenleiste wieder schmal anzeigen' : 'Seitenleiste groß anzeigen – mehr Platz für Kalender und Dienstplan'}">${wide ? 'Schmal' : 'Groß'}</button>`, body: html`
     <div class="row">${pill(p.cluster === 'offen' || p.cluster === 'ausgeschlossen' ? Core.CLUSTERS[p.cluster] : 'Cluster ' + p.cluster, 'info')}${pill(ROUTE_STATE[pr.state][0], ROUTE_STATE[pr.state][1])}
       ${privacy() ? '' : html`<span class="small muted">${p.pk}${p.org ? ' · ' + p.org : ''}</span>`}</div>
     <div class="small ink2">${Core.CLUSTERS[p.cluster]} · Berechtigung ${p.rights}${Object.entries(p.patterns).filter(x => x[1] && x[1] !== '—').map(([k, v]) => ' · ' + k + ': ' + v).join('')}</div>
     ${pr.steps.length ? html`<div><h3>Ausbildungsweg ${p.customRoute ? '(individuell)' : ''}</h3><div class="steps">${pr.steps.map(s => html`
-      <div class="step"><span>${s.type}</span><span class="tr"><i class="${tcls(s.type)}" style="width:${s.need ? Math.min(100, s.have / s.need * 100) : 0}%"></i></span><span class="num right">${s.have} / ${s.need} Tage</span></div>`)}</div>
+      <div class="step"><span>${tname(s.type)}</span><span class="tr"><i class="${tcls(s.type)}" style="width:${s.need ? Math.min(100, s.have / s.need * 100) : 0}%"></i></span><span class="num right">${s.have} / ${s.need} Tage</span></div>`)}</div>
       ${p.credit ? html`<p class="small muted" style="margin-top:6px">Davon Vorleistung aus Vorjahren: ${pr.steps.filter(s => s.credit).map(s => (TSHORT[s.type] || s.type) + ' ' + s.credit + ' Tage').join(' · ')}</p>` : ''}
       ${rep && ['open', 'blocked', 'partial'].includes(rep.status) ? html`<div class="note ${rep.status === 'partial' ? 'warn' : 'crit'}" style="margin-top:10px"><b>${REPORT_STATUS[rep.status][0]}:</b> ${rep.reason}${rep.remaining ? html`<br>Offen: ${rep.remaining.join(', ')}` : ''}</div>` : ''}</div>`
       : html`<div class="note">${pr.state === 'locked' ? 'Für diese Person werden keine neuen Maßnahmen geplant; in der Kapazität zählt sie weiter mit.' : 'Ohne Clusterzuordnung gibt es keinen Ausbildungsweg. Cluster unten wählen.'}</div>`}
-    <div><h3>Jahreskalender ${yr}</h3>
-      <div class="pcal">${personCalendar(p)}</div>
+    <div><div class="row" style="margin-bottom:6px"><h3 style="margin:0">Jahreskalender und Dienstplan ${yr}</h3><span class="sp"></span>
+        <button class="btn sm ${edit ? 'on' : 'primary'}" data-act="ros-edit" aria-pressed="${edit}">${edit ? 'Bearbeiten beenden' : 'Dienstplan bearbeiten'}</button></div>
+      ${edit ? rosterTools(p) : ''}
+      <div class="pcal ${edit ? 'edit' : ''}" id="pcal">${personCalendar(p)}</div>
       <div class="legend" style="margin-top:8px"><span><i class="sw s-0"></i>Früh</span><span><i class="sw s-1"></i>Spät</span><span><i class="sw s-2"></i>Nacht</span><span><i class="sw" style="background:var(--surface-3)"></i>frei</span><span><i class="sw" style="background:repeating-linear-gradient(135deg,var(--muted) 0 2px,var(--surface) 2px 4px)"></i>abwesend</span><span><i class="sw" style="background:var(--t-theorie);height:5px"></i>Maßnahme (Farbe = Art)</span></div>
-      <p class="small muted" style="margin-top:6px">${nf(duty)} Diensttage laut Plan · ${nf(vac)} davon abwesend</p></div>
+      <p class="small muted" style="margin-top:6px">${nf(duty)} Diensttage laut Plan · ${nf(vac)} davon abwesend</p>
+      ${rosterDefaultNote(p)}</div>
     <div><div class="row"><h3 style="margin:0">Termine (${evs.length})</h3><span class="sp"></span><button class="btn sm" data-act="event-new" data-pk="${p.alias}" ${Core.isLocked(p) ? raw('disabled') : ''}>Termin hinzufügen</button></div>
-      ${evs.length ? html`<table class="tbl" style="margin-top:6px"><tbody>${evs.map(e => { const cf = CONF.get(e.id); return html`<tr class="${cf && cf.hard.length ? 'rowcrit' : ''}"><td><i class="sw ${tcls(e.type)}"></i> ${e.title || e.type}</td><td class="nowrap">${fmtS(e.start)}–${fmt(e.end)}</td><td class="n">${(IX.evDays.get(e.id) || []).length} T</td><td class="muted">${originOf(e)}</td><td><button class="btn sm" data-act="event-open" data-id="${e.id}">Bearbeiten</button></td></tr>`; })}</tbody></table>` : html`<p class="small muted" style="margin-top:6px">Noch keine Termine.</p>`}</div>
+      ${evs.length ? html`<table class="tbl" style="margin-top:6px"><tbody>${evs.map(e => { const cf = CONF.get(e.id); return html`<tr class="${cf && cf.hard.length ? 'rowcrit' : ''}"><td><i class="sw ${tcls(e.type)}"></i> ${e.title || tname(e.type)}</td><td class="nowrap">${fmtS(e.start)}–${fmt(e.end)}</td><td class="n">${(IX.evDays.get(e.id) || []).length} T</td><td class="muted">${originOf(e)}</td><td><button class="btn sm" data-act="event-open" data-id="${e.id}">Bearbeiten</button></td></tr>`; })}</tbody></table>` : html`<p class="small muted" style="margin-top:6px">Noch keine Termine.</p>`}</div>
     <div><h3>Planungsdaten</h3><div class="form">
       <label class="f">Cluster${sel('cluster', Object.keys(Core.CLUSTERS).map(k => [k, clusterLabel(k)]), p.cluster, p.locked ? 'disabled' : '')}</label>
       <label class="f">Zielmuster${sel('target', [['', 'offen'], ...Core.TARGETS], p.target)}</label>
@@ -76,16 +83,18 @@ function drawerPerson(p) {
       <label class="f">Individueller Start<input type="date" data-chg="person" data-pk="${p.alias}" data-f="start" value="${p.start}" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Planungspriorität (1 zuerst)<input type="number" min="1" max="9" data-chg="person" data-pk="${p.alias}" data-f="priority" value="${p.priority}"></label>
       <label class="f" data-tip="Darf auch in einem Vorjahr liegen">Abschluss aller Doings<input type="date" data-chg="person" data-pk="${p.alias}" data-f="gate" value="${p.gate}" max="${yr}-12-31"></label>
-      <label class="f">Bereich ohne Dienstplan${sel('area', Core.AREAS, p.area)}</label>
-      <label class="f">Dienst ohne Dienstplan${sel('shift', Core.SHIFTS, p.shift)}</label>
+      <label class="f" data-tip="${S.settings.strict ? 'Vorgabe beim Eintragen des Dienstplans' : 'Gilt an Tagen ohne Dienstplan-Eintrag'}">${S.settings.strict ? 'Stammbereich' : 'Bereich ohne Dienstplan'}${sel('area', Core.AREAS, p.area)}</label>
+      <label class="f" data-tip="${S.settings.strict ? 'Angabe aus den Stammdaten; für die Planung zählt der eingetragene Dienstplan' : 'Gilt an Tagen ohne Dienstplan-Eintrag'}">${S.settings.strict ? 'Stammdienst' : 'Dienst ohne Dienstplan'}${sel('shift', Core.SHIFTS, p.shift)}</label>
     </div>
     <div class="stack" style="gap:8px;margin-top:10px">
       <label class="c"><input type="checkbox" data-chg="person" data-pk="${p.alias}" data-f="confirmed" ${p.confirmed ? raw('checked') : ''}> Individuelle Voraussetzungen bestätigt</label>
       <label class="c"><input type="checkbox" data-chg="person" data-pk="${p.alias}" data-f="locked" ${p.locked ? raw('checked') : ''}> Gesperrt – keine neuen Maßnahmen, Cluster nicht änderbar</label>
       ${route && route.includes(Core.LOGBOOK) ? html`<div class="row small"><span class="ink2">Logbook-Tage M1 / M2 / M3</span>${[0, 1, 2].map(j => html`<input type="number" class="w60" min="0" max="260" data-chg="person" data-pk="${p.alias}" data-f="rot${j}" value="${p.rotation ? rot[j] : ''}" placeholder="–" aria-label="Logbook-Tage ${Core.AREAS[j]}">`)}
         ${p.rotation ? html`<button class="btn sm" data-act="person-rot-clear" data-pk="${p.alias}">Rotation entfernen</button>` : html`<span class="muted">leer = alle Tage im eigenen Bereich</span>`}</div>` : ''}
-      ${route && route.length ? html`<div class="row small" data-tip="Tage, die vor diesem Planungsjahr bereits erbracht wurden. Der Planer verteilt nur den Rest. Beim Anlegen eines Folgejahres wird der Wert automatisch übernommen."><span class="ink2">Vorleistung aus Vorjahren (Tage)</span>${route.map(t => html`<label class="c">${TSHORT[t] || t}<input type="number" class="w60" min="0" max="999" data-chg="person" data-pk="${p.alias}" data-f="credit:${t}" value="${Core.creditOf(p, t) || ''}" placeholder="–" aria-label="Vorleistung ${t}"></label>`)}</div>` : ''}
+      ${route && route.length ? html`<div class="row small" data-tip="Tage, die vor diesem Planungsjahr bereits erbracht wurden. Der Planer verteilt nur den Rest. Beim Anlegen eines Folgejahres wird der Wert automatisch übernommen."><span class="ink2">Vorleistung aus Vorjahren (Tage)</span>${route.map(t => html`<label class="c">${TSHORT[t] || t}<input type="number" class="w60" min="0" max="999" data-chg="person" data-pk="${p.alias}" data-f="credit:${t}" value="${Core.creditOf(p, t) || ''}" placeholder="–" aria-label="Vorleistung ${tname(t)}"></label>`)}</div>` : ''}
     </div></div>
+    ${(route && route.includes(Core.MODULE_TYPE)) || p.modules ? html`<div class="row small" id="pMods" data-tip="Teilbeleger brauchen nur bestimmte Module. In einem Lehrgang mit Modulen belegen sie dann nur diese Tage – das gilt für den Planer, die beste Besetzung und den Jahresplan.">
+      <span class="ink2">${tname(Core.MODULE_TYPE)} – benötigte Module:</span><b>${p.modules ? Core.moduleText(p.modules) : 'alle'}</b>${p.modules ? pill('Teilbeleger', 'info') : ''}<button class="btn sm" data-act="person-modules" data-pk="${p.alias}">Module wählen</button></div>` : ''}
     <div class="row noprint">${route ? html`<button class="btn sm" data-act="route-person" data-pk="${p.alias}">Individuellen Weg bearbeiten</button>` : ''}<span class="sp"></span><button class="btn sm danger" data-act="person-delete" data-pk="${p.alias}">Person entfernen</button></div>` };
 }
 CHG.person = t => {
@@ -105,6 +114,25 @@ CHG.person = t => {
   });
 };
 ACT['person-rot-clear'] = t => commit('Rotation entfernt', () => { delete P(t.dataset.pk).rotation; });
+/** Welche Module eine Person braucht (Teilbeleger). Ihre Termine in Lehrgängen mit Modulen folgen der Auswahl. */
+ACT['person-modules'] = t => {
+  const p = P(t.dataset.pk); if (!p) return;
+  const n = Core.MODULE_COUNT, mine = new Set(p.modules || Array.from({ length: n }, (_, i) => i + 1));
+  const setAll = v => { for (const i of document.querySelectorAll('#pmList input')) i.checked = v; };
+  openModal({ title: 'Benötigte Module · ' + pName(p), body: html`
+    <p class="ink2">Welche Module von ${tname(Core.MODULE_TYPE)} braucht diese Person? Sind alle angekreuzt, belegt sie jeden Lehrgang ganz. Ein Teilbeleger belegt in einem Lehrgang mit Modulen nur die angekreuzten.</p>
+    <div class="mod-pick" id="pmList" style="grid-template-columns:repeat(4,minmax(0,1fr))">${Array.from({ length: n }, (_, i) => html`<label class="c"><input type="checkbox" value="${i + 1}" ${mine.has(i + 1) ? raw('checked') : ''}> <b>${Core.moduleName(i + 1)}</b></label>`)}</div>
+    <div class="row" style="margin-top:10px"><button class="btn sm" data-act="m:all">Alle Module</button><button class="btn sm" data-act="m:none">Keines</button></div>`,
+    footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Speichern</button>`,
+    handlers: { all: () => setAll(true), none: () => setAll(false), ok: () => {
+      const picked = [...document.querySelectorAll('#pmList input')].filter(i => i.checked).map(i => +i.value);
+      if (!picked.length) return toast('Mindestens ein Modul wählen', 'crit');
+      closeModal();
+      let r = { removed: 0 };
+      if (commit('', () => { r = Core.setPersonModules(S, IX, p.pk, picked); }))
+        toast(pName(p) + (picked.length === n ? ' braucht alle Module' : ' braucht ' + Core.moduleText(picked)) + (r.removed ? ' · aus ' + r.removed + (r.removed === 1 ? ' Lehrgang' : ' Lehrgängen') + ' ausgetragen, weil dort keines dieser Module stattfindet' : ''), r.removed ? 'crit' : '');
+    } } });
+};
 ACT['route-person'] = t => { const p = P(t.dataset.pk); UI.routeCluster = p.cluster; UI.routePerson = p.pk; closeDrawer(); go('routes'); };
 ACT['person-delete'] = async t => {
   const p = P(t.dataset.pk); if (!p) return;
@@ -131,13 +159,13 @@ function drawerEvent(e, pkNew) {
   const v = e || { type: 'Theorie', start: S.settings.start, end: S.settings.start, trainee: 1, mentor: 0, tec: 0, examiner: 0, title: '' };
   const cand = S.people.filter(x => !Core.isLocked(x)).slice().sort((a, b) => collator.compare(sortKey(a), sortKey(b)));
   const numF = (id, label, val) => html`<label class="f">${label}<input type="number" id="${id}" min="0" max="5" step="0.1" value="${val}"></label>`;
-  return { title: isNew ? 'Neuer Termin' : (e.title || e.type), body: html`
+  return { title: isNew ? 'Neuer Termin' : (e.title || tname(e.type)), body: html`
     ${e ? html`<div class="row">${pill(originOf(e), e.auto ? '' : 'info')}${e.partial ? pill('Teilweg', 'warn') : ''}${cf && cf.hard.length ? pill('Konflikt', 'crit') : ''}<span class="small muted">${ds.length} Ausbildungstage</span></div>` : ''}
     ${cf && cf.hard.length ? html`<div class="note crit"><b>Konflikt:</b> ${cf.hard.map(([r, c]) => r + ' (' + c + (c === 1 ? ' Tag' : ' Tage') + ')').join(' · ')}</div>` : ''}
     ${cf && cf.soft.length ? html`<div class="note warn">${cf.soft.map(([r, c]) => r + ': ' + c + (c === 1 ? ' Tag' : ' Tage')).join(' · ')}</div>` : ''}
     <div class="form">
       <label class="f" style="grid-column:1/-1">Person${e ? html`<input type="text" value="${pName(p)}" disabled>` : html`<select id="evPk">${opts(cand.map(x => [x.alias, pName(x) + ' · ' + personMeta(x)]), p ? p.alias : '')}</select>`}</label>
-      <label class="f">Maßnahme<select id="evType">${opts([...Core.typesOf(S), 'Sonstiges'], v.type)}</select></label>
+      <label class="f">Maßnahme<select id="evType">${opts(typeOpts([...Core.typesOf(S), 'Sonstiges']), v.type)}</select></label>
       <label class="f">Bezeichnung (optional)<input type="text" id="evTitle" maxlength="80" value="${v.title || ''}" placeholder="z. B. Kursname"></label>
       <label class="f">Beginn<input type="date" id="evStart" value="${v.start}" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Ende<input type="date" id="evEnd" value="${v.end}" min="${yr}-01-01" max="${yr}-12-31"></label>
@@ -184,7 +212,7 @@ function drawerDay(d) {
           row('davon Mentor / TEC / Prüfer', c => nf(c.mentor, 1) + ' / ' + nf(c.tec, 1) + ' / ' + nf(c.exam, 1), 'muted')]; })()}</tbody></table></div>`)}
     <div><h3>Maßnahmen an diesem Tag (${evs.length})</h3>
       ${evs.length ? html`<table class="tbl"><tbody>${evs.slice().sort((x, y) => x.type < y.type ? -1 : 1).map(e => { const i = IX.pi.get(e.pk), k = i === undefined ? -1 : Core.assign(IX, i, d);
-        return html`<tr><td><i class="sw ${tcls(e.type)}"></i> ${e.title || e.type}</td><td>${nameOf(e.pk)}</td><td class="muted">${k >= 0 ? Core.kShift(Core.eventK(IX, e, d, k)) : 'kein Dienst'}</td><td class="n">${nf(Core.num(e.trainee) + Core.num(e.mentor) + Core.num(e.tec) + Core.num(e.examiner), 1)}</td><td><button class="btn sm" data-act="event-open" data-id="${e.id}">Öffnen</button></td></tr>`; })}</tbody></table>` : html`<p class="small muted">Keine Maßnahmen.</p>`}</div>
+        return html`<tr><td><i class="sw ${tcls(e.type)}"></i> ${e.title || tname(e.type)}</td><td>${nameOf(e.pk)}</td><td class="muted">${k >= 0 ? Core.kShift(Core.eventK(IX, e, d, k)) : 'kein Dienst'}</td><td class="n">${nf(Core.num(e.trainee) + Core.num(e.mentor) + Core.num(e.tec) + Core.num(e.examiner), 1)}</td><td><button class="btn sm" data-act="event-open" data-id="${e.id}">Öffnen</button></td></tr>`; })}</tbody></table>` : html`<p class="small muted">Keine Maßnahmen.</p>`}</div>
     <div><h3>Abwesend im Dienst (${absent.length})</h3>
       ${absent.length ? html`<p class="small ink2">${Core.SHIFTS.map((s, si) => s + ': ' + absent.filter(x => x[2] % 3 === si).length).join(' · ')}</p>
         <details><summary class="small">Personen anzeigen</summary><table class="tbl"><tbody>${absent.map(([p, t, k]) => html`<tr><td>${pName(p)}</td><td class="muted">${Core.ABS_TYPES[t - 1]}</td><td class="muted">${Core.kShift(k)}</td></tr>`)}</tbody></table></details>` : html`<p class="small muted">Niemand abwesend.</p>`}</div>` };

@@ -17,7 +17,7 @@ export function boot() {
   let saved = null;
   if (!prj && !isDesktop && autosaveOn()) { try { const x = JSON.parse(store.get(LS.project) || store.get(LS.state) || 'null'); if (x) saved = Core.sanitizeAny(x).project; } catch (err) { saved = null; } }
   // Normalbetrieb: leer. Nur im Übungsmodus füllt sich das Fenster mit simulierten Daten.
-  setProject(prj || Core.wrapProject(practiceOn() ? Core.demoState({ year: Core.planningYear() }) : Core.emptyState(Core.planningYear())));
+  setProject(prj || Core.wrapProject(practiceOn() ? Core.demoState({ year: Core.planningYear() }) : Core.newProjectState(Core.planningYear())));
   render();
   if (note) toast(note);
   if (saved) { const st = saved.years[saved.active]; toast('Im Browser liegt ein zwischengespeicherter Stand (' + st.people.length + ' Personen, ' + fmt(String(st.meta.modified).slice(0, 10)) + ')', '', { label: 'Wiederherstellen', run: () => replaceProject(saved, 'Zwischengespeicherter Stand wiederhergestellt') }); }

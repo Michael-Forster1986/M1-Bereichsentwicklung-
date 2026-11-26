@@ -41,7 +41,7 @@ export function readiness(st, ix, sum) {
     absSim || sim.absences ? 'Abwesenheiten sind simuliert (' + absSim + ') – realen Urlaubsplan einspielen' : absReal ? absReal + ' reale Abwesenheiten' : 'Noch kein Urlaubsplan eingespielt', 'data');
   const withRoster = st.people.filter(p => st.roster[p.pk]).length;
   add('roster', 'Dienstplan', !withRoster ? (st.settings.strict ? 'crit' : 'warn') : sim.roster ? 'warn' : withRoster < n ? 'warn' : 'good',
-    !withRoster ? 'Kein Dienstplan – ' + (st.settings.strict ? 'so kann nichts geplant werden' : 'es gilt der Dienst je Person') : sim.roster ? 'Schichtrhythmus ist simuliert – die Kapazität ist eine Näherung, bis der echte Dienstplan eingespielt ist'
+    !withRoster ? 'Kein Dienstplan – ' + (st.settings.strict ? 'ohne eingetragene Dienste kann nichts geplant werden; als Excel einspielen oder je Person eintragen' : 'es gilt der Dienst je Person aus den Stammdaten') : sim.roster ? 'Schichtrhythmus ist simuliert – die Kapazität ist eine Näherung, bis der echte Dienstplan eingespielt ist'
       : withRoster < n ? 'Für ' + (n - withRoster) + ' Personen fehlt der Dienstplan' : 'Realer Dienstplan für alle Personen', 'data');
   const lim = AREAS.flatMap(a => SHIFTS.map(s => st.limits?.[a]?.[s])).filter(l => l && fin(l.min) && fin(l.zero)).length;
   add('limits', 'Grenzwerte der Produktion', lim >= 3 ? 'good' : lim ? 'warn' : 'crit', lim >= 3 ? 'Minimum und 0-Punkt für ' + lim + ' Dienste hinterlegt' : lim ? 'Nur für ' + lim + ' Dienste hinterlegt' : 'Minimum und 0-Punkt fehlen – Kapazität nicht prüfbar', 'capacity');

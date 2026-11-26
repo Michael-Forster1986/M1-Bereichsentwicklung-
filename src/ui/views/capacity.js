@@ -132,7 +132,7 @@ VIEWS.capacity = {
       <div class="stack">
         <div class="card"><h3>Prüfmodus</h3><div class="sub">Was bei der Neuberechnung verbindlich gilt</div><div class="stack" style="gap:8px">
           <label class="c"><input type="checkbox" data-chg="set" data-f="cap" ${st.cap ? raw('checked') : ''}> Kapazität verbindlich prüfen</label>
-          <label class="c"><input type="checkbox" data-chg="set" data-f="strict" ${st.strict ? raw('checked') : ''}> Nur tagesgenaue Dienstzuordnung (ohne Eintrag = kein Dienst)</label>
+          <label class="c"><input type="checkbox" data-chg="set" data-f="strict" ${st.strict ? raw('checked') : ''}> Tage ohne Dienstplan-Eintrag gelten als frei (aus = Dienst aus den Stammdaten annehmen)</label>
           <label class="c"><input type="checkbox" data-chg="set" data-f="confirmedOnly" ${st.confirmedOnly ? raw('checked') : ''}> Nur Personen mit bestätigten Voraussetzungen planen</label>
           <label class="c"><input type="checkbox" data-chg="set" data-f="avoidSchool" ${st.avoidSchool ? raw('checked') : ''}> Ferien bei Ausbildung meiden</label>
           <div class="form" style="margin-top:4px"><label class="f">Harte Grenze<select data-chg="set" data-f="goal">${opts([['min', 'Minimum'], ['zero', '0-Punkt']], st.goal)}</select></label>

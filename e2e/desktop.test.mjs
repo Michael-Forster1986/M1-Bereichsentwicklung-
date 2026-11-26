@@ -18,6 +18,7 @@ const PACKAGED = process.env.M1_APP || '';
 const ARGS = [...(PACKAGED ? [] : ['.']), '--user-data-dir=' + USER_DATA, ...(process.platform === 'linux' ? ['--no-sandbox', '--disable-gpu'] : [])];
 let app, page;
 const errors = [];
+const CLOCK = '2026-11-26T09:00:00';               // aus Sicht der Oberfläche: Planungsjahr 2027
 // In den Tests sucht das Programm höchstens nach einer neuen Version – geladen oder installiert wird nichts
 process.env.M1_UPDATE_DRY = '1';
 
@@ -27,6 +28,12 @@ async function launch(extra = [], env = {}) {
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.waitForSelector('#main h1');
+  // Die Tests rechnen mit dem Planungsjahr 2027. Das Programm leitet es aus dem Datum ab – deshalb steht die Uhr der
+  // Oberfläche hier fest (Zeitgeber laufen normal weiter), und die Oberfläche startet damit noch einmal.
+  await page.clock.setFixedTime(new Date(CLOCK));
+  await page.reload();
+  await page.waitForSelector('#main h1');
+  assert.equal(await page.evaluate(() => new Date().getFullYear() + '-' + (new Date().getMonth() + 1)), '2026-11', 'feste Uhr der Oberfläche');
   return page;
 }
 /** Beendet das Programm und wartet, bis der Prozess wirklich fort ist – sonst weist die Einzelinstanz-Sperre den nächsten Start ab. */
@@ -385,6 +392,272 @@ test('Ausbildungswege: Reihenfolge per Ziehen, eigener Schritt und zulässige Di
   assert.ok(await page.locator('.pchip:has-text("HF")').count(), 'eigener Schritt lässt sich in den Jahresplan ziehen');
 });
 
+test('Ausbildungswege: feste Schritte ändern, Regeln einstellen, Kacheln ohne Überlappung', async () => {
+  await menu('go', 'routes'); await page.waitForSelector('#rulesCard');
+  // Kacheln: keine Beschriftung ragt in ein Eingabefeld oder über den Kachelrand – auch nicht mit deutlich breiterer Schrift
+  const overlap = () => page.evaluate(() => {
+    const bad = [];
+    for (const l of document.querySelectorAll('.rt-res label, .rt-days')) {
+      const s = l.querySelector('span').getBoundingClientRect(), i = l.querySelector('input').getBoundingClientRect(), card = l.closest('.rt-step').getBoundingClientRect();
+      const hit = !(s.right <= i.left + 0.5 || s.left >= i.right - 0.5 || s.bottom <= i.top + 0.5 || s.top >= i.bottom - 0.5);
+      if (hit || i.right > card.right + 0.5 || s.right > card.right + 0.5) bad.push(l.textContent.trim());
+    }
+    return bad;
+  });
+  assert.ok(await page.locator('.rt-res label').count() >= 8);
+  assert.deepEqual(await overlap(), []);
+  const wide = await page.addStyleTag({ content: '.rt-step, .rt-step *{letter-spacing:.09em !important}' });
+  assert.deepEqual(await overlap(), [], 'auch mit breiterer Schrift');
+  await wide.evaluate(n => n.remove());
+
+  // feste Maßnahme: Bezeichnung, Kürzel und Farbe ändern – der Name bleibt der Schlüssel
+  await page.click('#msCard [data-act="measure-edit"][data-t="Practical Logbook"]'); await page.waitForSelector('#msName');
+  assert.equal(await page.inputValue('#msName'), 'Practical Logbook');
+  assert.equal(await page.isDisabled('input[name=msKind][value="1"]'), true, 'Art gesperrt, weil es bereits Termine gibt');
+  await page.fill('#msName', 'FitCheck'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /gibt es bereits als feste Maßnahme/.test(await toastText()), 'vergebene Bezeichnung wird abgelehnt');
+  await page.fill('#msName', 'Logbuch Praxis'); await page.fill('#msShort', 'LB'); await page.click('.ms-colors label:has(input[value="4"]) i');
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('.rt-step[data-step="Practical Logbook"] .rt-sh b').innerText()) === 'Logbuch Praxis', 'neue Bezeichnung auf der Schrittkarte');
+  assert.match(await page.locator('#msCard tr:has-text("Logbuch Praxis")').innerText(), /angepasst/);
+  assert.equal(await page.locator('.rt-step[data-step="Practical Logbook"] .rt-top.t-x4').count(), 1, 'neue Farbe');
+  // Vorbereitung und ICA: die Art steht fest
+  await page.click('#msCard [data-act="measure-edit"][data-t="ICA"]'); await page.waitForSelector('#msName');
+  assert.equal(await page.isDisabled('input[name=msKind][value="1"]'), true);
+  assert.match(await page.locator('#modal').innerText(), /Die Art steht fest/);
+  await page.click('#modal [data-act="modal-close"]');
+
+  // Regeln: Voraussetzung nur noch für Cluster 4B, A320-Regel aus, Weg für die Zielstufe TEC um die ICA erweitert
+  await page.click('#rulesCard [data-chg="rule-frame"][data-k="3"]');
+  await waitFor(async () => /Voraussetzung für Cluster 4B/.test(await toastText()), 'Regel zur Voraussetzung geändert');
+  await page.click('#rulesCard [data-chg="rule"][data-k="deferA320"]');
+  await waitFor(() => page.evaluate(() => /gilt nicht/.test(document.querySelector('#rulesCard [data-k="deferA320"]').closest('label').innerText)), 'A320-Regel abgeschaltet');
+  await page.click('#rulesCard [data-act="rule-tec-edit"]'); await page.waitForSelector('#tecRoute');
+  const tec = () => page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-scope="tec"] .rt-step')].map(x => x.dataset.step));
+  assert.deepEqual(await tec(), ['Theorie', 'Praxis']);
+  await page.click('[data-act="route-add"][data-scope="tec"][data-t="ICA"]');
+  await waitFor(async () => (await tec()).length === 3, 'ICA im Weg für die Zielstufe TEC');
+  await page.click('.rt-flow[data-scope="tec"] [data-act="route-move"][data-t="ICA"][data-dir="-1"]');
+  await waitFor(async () => (await tec())[1] === 'ICA', 'ICA vorgezogen');
+  assert.deepEqual(await tec(), ['Theorie', 'ICA', 'Praxis']);
+  assert.equal(await page.locator('#ruleTec').innerText(), 'Theorie → ICA → Praxis');
+  assert.equal(await page.locator('#rulesCard .pill:has-text("geändert")').count(), 3);
+  // der Clusterweg von Cluster 5 bleibt davon unberührt
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('.rt-flow[data-keep="rtflow"] .rt-step')].map(x => x.dataset.step)), ['Practical Logbook']);
+
+  // alles steht in der Projektdatei – gespeichert wird nur die Abweichung von der Vorgabe
+  const file = path.join(TMP, 'Regeln.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit Regeln');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active];
+  assert.deepEqual(st.settings.rules, { frame: ['4B'], tecRoute: ['Theorie', 'ICA', 'Praxis'], deferA320: false });
+  assert.deepEqual(st.measureEdits, { 'Practical Logbook': { label: 'Logbuch Praxis', short: 'LB', color: 4 } });
+  assert.ok(st.events.some(e => e.type === 'Practical Logbook') && !st.events.some(e => e.type === 'Logbuch Praxis'), 'Termine behalten den Namen der Maßnahme');
+  // zurück auf die Vorgabe
+  await page.click('#rulesCard [data-act="rules-reset"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('#rulesCard .pill:has-text("geändert")').count()) === 0, 'Regeln wieder auf Vorgabe');
+  assert.deepEqual(await tec(), ['Theorie', 'Praxis']);
+});
+
+test('Ausbildungswege: ein geänderter individueller Weg kommt per Knopf in den Jahresplan', async () => {
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+  await page.click('.rt-card >> nth=1');                                     // Cluster 2
+  const snap = async name => { const f = path.join(TMP, name); await nextSave(f); await menu('act', 'save-project-as'); await waitFor(() => fs.existsSync(f), name); const prj = JSON.parse(fs.readFileSync(f, 'utf8')); return prj.years[prj.active]; };
+  const sig = e => [e.id, e.type, e.start, e.end].join('|');
+  const before = await snap('Vor-Uebernahme.m1cockpit');
+  // eine Person wählen und ihren Weg ändern: FitCheck 4 Tage – damit entsteht ein individueller Weg
+  const alias = await page.evaluate(() => document.querySelector('[data-chg="route-person"] option:nth-child(2)').value);
+  await page.selectOption('[data-chg="route-person"]', alias);
+  await waitFor(async () => /Individueller Weg/.test(await page.locator('#main').innerText()), 'Person gewählt');
+  assert.equal(await page.locator('#rtPlan.dirty').count(), 0, 'ohne Änderung kein Hinweis');
+  await page.fill('.rt-flow[data-keep="rtflow"] .rt-step[data-step="FitCheck"] input[data-f="days"]', '4'); await page.keyboard.press('Tab');
+  await page.waitForSelector('#rtPlan.dirty');
+  assert.match(await page.locator('#rtPlan').innerText(), /noch nicht übernommen/);
+  // der Jahresplan ist bis hierher unverändert
+  const between = await snap('Zwischen-Uebernahme.m1cockpit'), person = between.people.find(p => p.alias === alias);
+  assert.equal(person.customRoute.config.FitCheck.days, 4);
+  assert.deepEqual(between.events.map(sig).sort(), before.events.map(sig).sort());
+  // Übernahme: nur diese Person wird neu verteilt
+  await page.click('#rtPlan [data-act="route-apply"]');
+  await waitFor(async () => /in den Jahresplan übernommen|planbar/.test(await toastText()), 'Meldung zur Übernahme');
+  await waitFor(async () => (await page.locator('#rtPlan.dirty').count()) === 0, 'Hinweis verschwindet');
+  const after = await snap('Nach-Uebernahme.m1cockpit'), r = after.report.find(x => x.pk === person.pk);
+  assert.deepEqual(after.events.filter(e => e.pk !== person.pk).map(sig).sort(), before.events.filter(e => e.pk !== person.pk).map(sig).sort(), 'alle anderen Termine bleiben unverändert');
+  assert.ok(r && ['planned', 'kept', 'partial', 'blocked'].includes(r.status), 'Berichtszeile der Person');
+  if (r.status === 'planned') {
+    assert.equal(after.events.filter(e => e.pk === person.pk && e.type === 'FitCheck').reduce((s, e) => s + e.dates.length, 0), 4, 'FitCheck mit vier Tagen im Jahresplan');
+    const old = new Set(before.events.filter(e => e.pk === person.pk && e.auto).map(e => e.id));
+    assert.ok(after.events.filter(e => e.pk === person.pk && e.auto).every(e => !old.has(e.id)), 'berechnete Termine der Person neu verteilt');
+  }
+  // die Meldung führt in den Jahresplan
+  await page.click('#toasts .toast:has-text("Jahresplan") button');
+  await page.waitForSelector('#gantt .g-row');
+  await page.keyboard.press('Control+z');                                     // Rückgängig nimmt die Übernahme zurück
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+});
+
+test('Jahresplan: Monatsansicht zeigt die Zeilen, hineinzoomen bis auf einzelne Tage', async () => {
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  assert.match(await page.locator('#main').innerText(), /Logbuch Praxis/, 'geänderte Bezeichnung in der Legende');
+  const rowVisible = () => page.evaluate(() => {
+    const lab = document.querySelector('.g-row .g-lab'); lab.scrollIntoView({ block: 'center' });
+    const r = lab.getBoundingClientRect(), el = document.elementFromPoint(r.left + 20, r.top + r.height / 2);
+    return r.width > 50 && r.height > 10 && !!el && !!el.closest('.g-lab') && lab.textContent.trim().length > 0;
+  });
+  assert.equal(await rowVisible(), true, 'Zeilen in der Jahresansicht');
+  assert.equal(await page.locator('.g-days').count(), 0, 'in der Jahresansicht keine Tagesleiste');
+  for (const [z, name] of [['12', 'Monat'], ['26', '2 Wochen']]) {
+    await page.click('[data-act="gantt-zoom"][data-z="' + z + '"]');
+    await waitFor(() => page.evaluate(() => document.querySelectorAll('.g-days span').length === 365), 'Tagesleiste in der Ansicht ' + name);
+    assert.equal(await rowVisible(), true, 'Zeilen in der Ansicht ' + name);
+    // je nach Fensterbreite steht der Wochentag dabei; in der Ansicht „2 Wochen“ immer
+    assert.match(await page.locator('.g-days span >> nth=3').innerText(), z === '26' ? /^(Mo|Di|Mi|Do|Fr|Sa|So) \d+\.$/ : /^((Mo|Di|Mi|Do|Fr|Sa|So) )?\d+\.$/, 'Tag (und Wochentag)');
+  }
+  // Strg + Mausrad zoomt stufenweise heraus
+  const box = await page.locator('#gantt').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height, 200) / 2);
+  await page.keyboard.down('Control'); await page.mouse.wheel(0, 120); await page.keyboard.up('Control');
+  await waitFor(() => page.evaluate(() => (document.querySelector('[data-act="gantt-zoom"].on, [data-act="gantt-zoom"][aria-pressed="true"]') || { dataset: {} }).dataset.z === '12'), 'Strg + Mausrad: zurück zur Monatsansicht');
+  await page.click('[data-act="gantt-zoom"][data-z="1"]');
+  await waitFor(async () => (await page.locator('.g-days').count()) === 0, 'zurück in der Jahresansicht');
+});
+
+test('Lehrgänge: Basic Knowledge mit Modulen, N/A und Teilbelegern – bis in den Jahresplan', async () => {
+  // Basic Knowledge gehört für diesen Test zum Weg von Cluster 1
+  await menu('go', 'routes'); await page.waitForSelector('#rtPlan');
+  await page.click('.rt-card >> nth=0');
+  await page.click('.rt-flow[data-keep="rtflow"] ~ .row [data-act="route-add"][data-t="Basic Knowledge"]');
+  await page.waitForSelector('.rt-step[data-step="Basic Knowledge"]');
+  await page.fill('.rt-step[data-step="Basic Knowledge"] input[data-f="days"]', '20'); await page.keyboard.press('Tab');
+  await menu('go', 'courses'); await page.waitForSelector('.dm:has-text("Basic Knowledge") [data-act="crs-new"]');
+  await page.click('.dm:has-text("Basic Knowledge") [data-act="crs-new"]'); await page.waitForSelector('#cnTitle');
+  // die Erweiterung erscheint nur bei Basic Knowledge; die Modul-Tabelle erst mit dem Kästchen „Teilbeleger dabei“
+  assert.equal(await page.isVisible('#cnMods'), true);
+  await page.selectOption('#cnType', 'Theorie'); assert.equal(await page.isVisible('#cnMods'), false);
+  await page.selectOption('#cnType', 'Basic Knowledge'); assert.equal(await page.isVisible('#cnMods'), true);
+  assert.equal(await page.isVisible('#cnModBox'), false, 'ohne Teilbeleger keine Modul-Tabelle');
+  assert.equal(await page.isDisabled('#cnStart'), false);
+  await page.check('#cnPartial');
+  assert.equal(await page.locator('#modEd .mod-r').count(), 17);
+  assert.equal(await page.isDisabled('#cnStart'), true, 'der Zeitraum ergibt sich aus den Modulen');
+  const setMod = async (no, a, b) => { const r = page.locator('#modEd .mod-r[data-no="' + no + '"]'); await r.locator('input[data-f="start"]').fill(a); await r.locator('input[data-f="start"]').dispatchEvent('change'); if (b) { await r.locator('input[data-f="end"]').fill(b); await r.locator('input[data-f="end"]').dispatchEvent('change'); } };
+  await setMod(1, '2027-01-11', '2027-01-15'); await setMod(2, '2027-01-18', '2027-01-22'); await setMod(3, '2027-02-01');          // eintägig: das Ende folgt dem Beginn
+  assert.equal(await page.inputValue('#modEd .mod-r[data-no="3"] input[data-f="end"]'), '2027-02-01');
+  // mit Teilbelegern muss jedes Modul einen Zeitraum haben – oder N/A sein
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /M4: Beginn und Ende eintragen/.test(await toastText()), 'unvollständige Module werden abgelehnt');
+  assert.equal(await page.isVisible('#cnTitle'), true, 'der Dialog bleibt offen');
+  for (let no = 4; no <= 17; no++) await page.check('#modEd .mod-r[data-no="' + no + '"] input[type=checkbox]');
+  assert.match(await page.locator('#modSum').innerText(), /3 Module mit Zeitraum .*14 N\/A$/);
+  assert.equal(await page.isDisabled('#modEd .mod-r[data-no="9"] input[data-f="start"]'), true);
+  await page.click('#modal [data-act="m:ok"]'); await page.waitForSelector('#crsDetail #crsMods');
+  assert.equal(await page.locator('#crsDetail .mchip').count(), 17);
+  assert.equal(await page.locator('#crsDetail .mchip.na').count(), 14);
+  assert.equal(await page.locator('.crs-time .cbar.seg').count(), 3, 'ein Abschnitt je Modul in der Zeitleiste');
+  assert.equal(await page.inputValue('#crsDetail input[data-f="start"]'), '2027-01-11');
+  assert.equal(await page.inputValue('#crsDetail input[data-f="end"]'), '2027-02-01');
+  assert.equal(await page.isDisabled('#crsDetail input[data-f="end"]'), true);
+  // zwei Teilnehmer; der erste wird Teilbeleger und belegt nur M2
+  await page.click('#crsDetail [data-act="crs-join"] >> nth=0');
+  await waitFor(async () => (await page.locator('#crsDetail [data-act="crs-member-mods"]').count()) === 1, 'erster Teilnehmer');
+  await page.click('#crsDetail [data-act="crs-join"] >> nth=0');
+  await waitFor(async () => (await page.locator('#crsDetail [data-act="crs-member-mods"]').count()) === 2, 'zweiter Teilnehmer');
+  await page.click('#crsDetail [data-act="crs-member-mods"] >> nth=0'); await page.waitForSelector('#mmList');
+  assert.equal(await page.locator('#mmList input:not(:disabled)').count(), 3);
+  assert.equal(await page.locator('#mmList input:disabled').count(), 14);
+  await page.click('#modal [data-act="m:none"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /Mindestens ein Modul wählen/.test(await toastText()), 'ohne Modul kein Teilbeleger');
+  await page.check('#mmList input[value="2"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /Teilbeleger: M2/.test(await page.locator('#crsDetail').innerText()), 'Teilbeleger im Lehrgang');
+  assert.match(await page.locator('#crsDetail').innerText(), /alle Module/);
+  // Projektdatei: Module am Lehrgang, benötigte Module an der Person, Termine genau an den Modultagen
+  const file = path.join(TMP, 'Module.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit Modulen');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active], c = st.courses.find(x => x.type === 'Basic Knowledge');
+  assert.deepEqual([c.start, c.end, c.modules.length], ['2027-01-11', '2027-02-01', 17]);
+  assert.deepEqual(c.modules.filter(m => !m.na), [{ no: 1, start: '2027-01-11', end: '2027-01-15' }, { no: 2, start: '2027-01-18', end: '2027-01-22' }, { no: 3, start: '2027-02-01', end: '2027-02-01' }]);
+  const evs = st.events.filter(e => e.courseId === c.id), part = st.people.find(p => Array.isArray(p.modules));
+  assert.equal(evs.length, 2);
+  assert.ok(part && part.modules.includes(2) && !part.modules.includes(1) && !part.modules.includes(3), 'die Person braucht M2, nicht M1 und M3');
+  assert.deepEqual(evs.find(e => e.pk === part.pk).dates, ['2027-01-18', '2027-01-19', '2027-01-20', '2027-01-21', '2027-01-22']);
+  assert.equal(evs.find(e => e.pk !== part.pk).dates.length, 11);
+  // Jahresplan: der Balken zerfällt in die Module – drei beim Vollbeleger, eines beim Teilbeleger
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  await waitFor(async () => (await page.locator('#gantt .bar.md').count()) === 4, 'Modulabschnitte im Jahresplan');
+  assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M2"]').count(), 2);
+  assert.equal(await page.locator('#gantt .bar.md[aria-label^="Basic Knowledge M1"]').count(), 1);
+  // Seitenleiste der Person: benötigte Module ansehen und ändern – der Jahresplan folgt sofort
+  await page.evaluate(() => { const row = [...document.querySelectorAll('#gantt .g-row')].find(r => r.querySelectorAll('.bar.md').length === 1); row.querySelector('.g-lab').click(); });
+  await page.waitForSelector('#pMods');
+  assert.match(await page.locator('#pMods').innerText(), /M2[\s\S]*Teilbeleger/);
+  await page.click('#pMods [data-act="person-modules"]'); await page.waitForSelector('#pmList');
+  assert.equal(await page.locator('#pmList input').count(), 17);
+  assert.equal(await page.isChecked('#pmList input[value="1"]'), false);
+  assert.equal(await page.isChecked('#pmList input[value="2"]'), true);
+  await page.click('#modal [data-act="m:all"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /braucht alle Module/.test(await toastText()), 'Person braucht wieder alle Module');
+  await waitFor(async () => (await page.locator('#gantt .bar.md').count()) === 6, 'beide belegen jetzt drei Module');
+  await page.click('[data-act="drawer-close"]');
+  // ohne Teilbeleger: die Module entfallen, alle belegen wieder den ganzen Zeitraum
+  await menu('go', 'courses'); await page.waitForSelector('#crsDetail #crsMods');
+  await page.click('#crsDetail [data-chg="crs-partial"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('#crsDetail .mchip').count()) === 0, 'Module verworfen');
+  assert.equal(await page.isDisabled('#crsDetail input[data-f="end"]'), false);
+  assert.equal(await page.locator('.crs-time .cbar.seg').count(), 0);
+  await page.click('#crsDetail [data-act="crs-delete"]'); await page.click('#modal [data-act="m:ok"]');
+});
+
+test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge und Ziehen', async () => {
+  await menu('go', 'year'); await page.waitForSelector('.g-row');
+  await page.click('.g-row >> nth=0 >> .g-lab'); await page.waitForSelector('#pcal');
+  const width = () => page.evaluate(() => Math.round(document.querySelector('#drawer').getBoundingClientRect().width));
+  // Buchstaben der Tage ab einem Tagesindex (0 = 1. Januar): F, S, N oder · für frei
+  const letters = (from, n) => page.evaluate(([a, c]) => Array.from({ length: c }, (_, i) => (document.querySelector('#pcal i[data-d="' + (a + i) + '"] b') || {}).textContent || '·').join(''), [from, n]);
+  const narrow = await width();
+  assert.equal(await page.locator('#rosTools').count(), 0, 'Werkzeuge erscheinen erst beim Bearbeiten');
+  await page.click('[data-act="ros-edit"]'); await page.waitForSelector('#rosTools');
+  assert.ok(await width() > narrow + 150, 'Bearbeiten zeigt die Seitenleiste groß');
+  // leeren: ohne Eintrag ist jeder Tag frei
+  await page.click('[data-act="ros-clear"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await letters(3, 7)) === '·······', 'geleerter Dienstplan');
+  assert.match(await page.textContent('#drawer'), /Tage ohne Eintrag gelten als frei/);
+  // Zeitraum füllen: Früh, Mo–Fr, ganzes Jahr (04.–10.01.2027 = Montag bis Sonntag)
+  await page.click('[data-act="ros-fill"]');
+  await waitFor(async () => (await letters(3, 7)) === 'FFFFF··', 'Frühdienst Montag bis Freitag');
+  assert.match(await toastText(), /261 Tage als M1 · Früh eingetragen/);
+  // Wochenfolge Früh → Spät → Nacht ab 01.03.2027 (ein Montag)
+  await page.fill('#rosTools input[data-f="start"]', '2027-03-01'); await page.selectOption('#rosSeq2', 'Nacht');
+  await page.click('[data-act="ros-week"]');
+  await waitFor(async () => (await letters(59, 21)) === 'FFFFF··SSSSS··NNNNN··', 'Wochenfolge');
+  // Dienst per Auswahl wählen, dann von einem Tag zum anderen ziehen – auch über die Monatsgrenze (31.05. bis 04.06.)
+  await page.selectOption('#rosShift', 'Frei');
+  await page.evaluate(() => document.querySelector('#pcal i[data-d="154"]').scrollIntoView({ block: 'center' }));      // beide Zeilen ins Bild, auch auf kleinen Bildschirmen
+  const a = await page.locator('#pcal i[data-d="150"]').boundingBox(), b = await page.locator('#pcal i[data-d="154"]').boundingBox();
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 8 }); await page.mouse.up();
+  await waitFor(async () => (await letters(150, 5)) === '·····', 'überstrichener Zeitraum ist frei');
+  // ein einzelner Klick trägt genau diesen Tag ein
+  await page.selectOption('#rosShift', 'Nacht'); await page.selectOption('#rosArea', 'M2');
+  await page.evaluate(() => document.querySelector('#rosTools').scrollIntoView({ block: 'start' }));
+  await page.evaluate(() => document.querySelector('#pcal i[data-d="152"]').scrollIntoView({ block: 'center' }));
+  await page.click('#pcal i[data-d="152"]');
+  await waitFor(async () => (await letters(150, 5)) === '··N··', 'einzelner Tag');
+  assert.match(await toastText(), /1 Tag als M2 · Nacht eingetragen/);
+  // auf andere Personen übertragen und mit Rückgängig zurück
+  await page.click('[data-act="ros-copy-to"]'); await page.waitForSelector('input[name=rosTo]');
+  await page.check('input[name=rosTo][value="all"]'); await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /auf 140 Personen übertragen/.test(await toastText()), 'Übertragen');
+  await menu('act', 'undo');
+  await waitFor(async () => /rückgängig/.test(await toastText()), 'Rückgängig');
+  // Größe umschalten, Bearbeiten beenden
+  await page.click('[data-act="drawer-size"]'); assert.equal(await width(), narrow);
+  await page.click('[data-act="drawer-size"]'); assert.ok(await width() > narrow + 150);
+  await page.click('[data-act="ros-edit"]');
+  assert.equal(await page.locator('#rosTools').count(), 0);
+  await page.click('[data-act="drawer-close"]');
+});
+
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });
 
 test('Wiederherstellungskopie: nur auf Wunsch, wird nach Absturz angeboten', async () => {
@@ -427,7 +700,8 @@ test('Fehleraufzeichnung: Programmfehler landen ohne Projektdaten im Protokoll',
   if (!app) await launch();
   const log = path.join(USER_DATA, 'Fehlerprotokoll.txt');
   fs.rmSync(log, { force: true });
-  await page.evaluate(() => { setTimeout(() => { null.fehlt; }, 0); });
+  // ein Programmfehler in einer Ereignisbehandlung – so, wie er in der Oberfläche tatsächlich aufträte
+  await page.evaluate(() => { document.body.addEventListener('m1-testfehler', () => { null.fehlt; }, { once: true }); document.body.dispatchEvent(new Event('m1-testfehler')); });
   await waitFor(() => fs.existsSync(log), 'Eintrag im Fehlerprotokoll');
   const text = fs.readFileSync(log, 'utf8');
   assert.match(text, /Version \d+\.\d+\.\d+ {2}Oberfläche: Programmfehler: TypeError/);

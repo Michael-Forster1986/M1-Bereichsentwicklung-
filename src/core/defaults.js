@@ -40,6 +40,15 @@ export function emptyState(year = 2027) {
       privacy: false, simulated: { roster: false, absences: false }, assumptions: [] },
     people: [], events: [], absences: [], holidays: [], school: year === 2027 ? clone(SCHOOL_BY_2027) : [],
     capacity: [], roster: {}, limits: defaultLimits(), config: defaultConfig(), routes: clone(DEFAULT_ROUTES),
-    settings: defaultSettings(year), report: [], planInfo: null, realImports: [], courses: [], measures: []
+    settings: defaultSettings(year), report: [], planInfo: null, realImports: [], courses: [], measures: [], measureEdits: {}
   };
+}
+/**
+ * Leerer Stand für die echte Planung. Anders als die Vorgabe der Einzeldatei gilt ein Tag ohne Dienstplan-Eintrag als frei:
+ * Dienste werden ausdrücklich eingetragen oder eingespielt, nichts wird aus den Stammdaten angenommen.
+ */
+export function newProjectState(year) {
+  const st = emptyState(year);
+  st.settings.strict = true;
+  return st;
 }

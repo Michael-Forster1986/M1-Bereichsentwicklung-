@@ -3,7 +3,9 @@ import { isCourse, measureOf, shiftsOf } from './measures.js';
 import { num, uid } from './util.js';
 import { validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
+import { FRAME_TYPE, rulesOf } from './rules.js';
 import { assign, buildIndex, capInfo, eventK } from './indexing.js';
+import { hasModules, memberModules, moduleSpan, normModules, normPersonModules } from './modules.js';
 
 // ---------- Lehrgangsplanung (zusammenhängende Kurse) -------------------
 /**
@@ -17,7 +19,9 @@ export function courseAssess(st, ix, o) {
   if (!all.length) { issues.push({ cat: 'Eingabe', text: 'Keine Teilnehmer ausgewählt' }); return res; }
   if (!validDate(o.start) || !validDate(o.end) || o.end < o.start) { issues.push({ cat: 'Eingabe', text: 'Ungültiger Zeitraum' }); return res; }
   const a = Math.max(0, cal.idx(o.start)), b = Math.min(ix.n - 1, cal.idx(o.end));
-  for (let d = a; d <= b; d++) if (ix.work[d]) res.days.push(d);
+  // o.days: die Lehrgangstage stehen fest (Lehrgang mit Modulen) · o.daysOf(pk): Tage, die diese Person belegt
+  if (o.days) res.days.push(...o.days); else for (let d = a; d <= b; d++) if (ix.work[d]) res.days.push(d);
+  const daysOf = pk => o.daysOf ? o.daysOf(pk) : res.days;
   if (!res.days.length) { issues.push({ cat: 'Eingabe', text: 'Zeitraum enthält keinen Arbeitstag' }); return res; }
   const movable = e => o.ignoreReplaceable && (e.auto || e.synthetic);
   for (const d of res.days) if (ix.school[d]) { res.school++; if (o.avoidSchool) issues.push({ cat: 'Ferien', d }); }
@@ -25,8 +29,10 @@ export function courseAssess(st, ix, o) {
   const personal = new Map(), duty = new Map(), credit = new Map();
   for (const pk of all) {
     const i = ix.pi.get(pk), mine = [], cells = [], win = o.window && o.window.get(pk);
-    if (win && (a < win.earliest || b > win.latest)) mine.push({ cat: 'Reihenfolge im Ausbildungsweg', pk, d: a });
-    for (const d of res.days) {
+    const pd = daysOf(pk);
+    if (!pd.length) mine.push({ cat: 'Kein benötigtes Modul', pk, d: a });
+    if (win && pd.length && (pd[0] < win.earliest || pd[pd.length - 1] > win.latest)) mine.push({ cat: 'Reihenfolge im Ausbildungsweg', pk, d: a });
+    for (const d of pd) {
       if (ix.abs[i][d]) { mine.push({ cat: 'Abwesenheit', pk, d }); continue; }
       const own = ix.evByDay[d].filter(e => e.pk === pk && e.type !== PREP);
       if (own.some(e => !movable(e))) { mine.push({ cat: 'Terminkollision', pk, d }); continue; }
@@ -91,7 +97,7 @@ export function courseAssess(st, ix, o) {
   const okShift = o.shiftType ? shiftsOf(st, o.shiftType) : [true, false, false];        // ohne Angabe der Art gilt die Vorgabe: Frühdienst
   for (const pk of group) {
     const i = ix.pi.get(pk);
-    for (const d of res.days) { const k = assign(ix, i, d); if (k < 0) res.adjust++; else if (!okShift[k % 3]) res.offShift++; }
+    for (const d of daysOf(pk)) { const k = assign(ix, i, d); if (k < 0) res.adjust++; else if (!okShift[k % 3]) res.offShift++; }
   }
   if (o.group === 'max' && group.length < Math.max(1, o.minGroup || 1)) issues.push({ cat: 'Gruppe zu klein', text: group.length + ' von mindestens ' + (o.minGroup || 1) });
   res.ok = issues.length === 0;
@@ -136,12 +142,34 @@ export function courseEvents(ix, a, { name = 'TEC Lehrgang', type = 'Theorie', k
 // Ein Lehrgang (st.courses) beschreibt Art, Zeitraum und Plätze. Wer teilnimmt, steht in den Terminen
 // (st.events) mit courseId – so zählen Lehrgänge in Kapazität, Konfliktprüfung und Ausbildungsweg wie jeder Termin.
 
-/** Arbeitstage eines Lehrgangs als Tagesindizes. */
-export function courseDayList(ix, c) {
+const workDays = (ix, start, end) => {
   const out = [];
-  if (!validDate(c.start) || !validDate(c.end)) return out;
-  for (let d = Math.max(0, ix.cal.idx(c.start)), b = Math.min(ix.n - 1, ix.cal.idx(c.end)); d <= b; d++) if (ix.work[d]) out.push(d);
+  if (!validDate(start) || !validDate(end)) return out;
+  for (let d = Math.max(0, ix.cal.idx(start)), b = Math.min(ix.n - 1, ix.cal.idx(end)); d <= b; d++) if (ix.work[d]) out.push(d);
   return out;
+};
+/** Arbeitstage je Modul, das stattfindet: [{ no, start, end, days }]. Ein Tag gehört nur zu einem Modul – bei Überschneidung zum früheren. */
+export function moduleDays(ix, c) {
+  if (!hasModules(c)) return [];
+  const seen = new Set();
+  return c.modules.filter(m => !m.na).map(m => { const days = workDays(ix, m.start, m.end).filter(d => !seen.has(d)); for (const d of days) seen.add(d); return { no: m.no, start: m.start, end: m.end, days }; });
+}
+const union = lists => [...new Set(lists.flat())].sort((a, b) => a - b);
+/** Arbeitstage eines Lehrgangs als Tagesindizes. Bei einem Lehrgang mit Modulen: die Tage der Module, die stattfinden. */
+export function courseDayList(ix, c) {
+  return hasModules(c) ? union(moduleDays(ix, c).map(m => m.days)) : workDays(ix, c.start, c.end);
+}
+/** Tage, die eine Person in diesem Lehrgang belegt: bei Modulen nur die der Module, die sie braucht. */
+export function memberDayList(ix, c, p) {
+  if (!hasModules(c)) return workDays(ix, c.start, c.end);
+  const mine = new Set(memberModules(c, p));
+  return union(moduleDays(ix, c).filter(m => mine.has(m.no)).map(m => m.days));
+}
+/** Module, in denen die Tage eines Teilnehmertermins liegen: [{ no, days }] – für Anzeige und Auswertung. */
+export function eventModules(ix, c, e) {
+  if (!hasModules(c)) return [];
+  const mine = new Set(ix.evDays.get(e.id) || []);
+  return moduleDays(ix, c).map(m => ({ no: m.no, days: m.days.filter(d => mine.has(d)) })).filter(m => m.days.length);
 }
 export const courseMembers = (st, id) => st.events.filter(e => e.courseId === id);
 export const courseKey = c => c.type + '|' + c.title + '|' + c.start + '|' + c.end;
@@ -160,12 +188,12 @@ const hasCoursePlace = (p, t, evs, need) => evs.some(e => e.type === t && (e.cou
  * placed = haben einen Platz · open = brauchen noch einen. Cluster 3 / 4B brauchen den Praxis-Lehrgang als Voraussetzung.
  */
 export function courseDemand(st, ix) {
-  const groups = new Map();
+  const groups = new Map(), frame = rulesOf(st).frame;
   for (const p of st.people) {
     if (isLocked(p) || p.cluster === 'offen') continue;
     const route = routeOf(st, p) || [], cfg = cfgOf(st, p) || {}, evs = ix.evByPerson.get(p.pk) || [];
     const need = new Map(route.filter(t => isCourse(st, t)).map(t => [t, false]));
-    if (['3', '4B'].includes(p.cluster) && !p.gate && !need.has('Praxis')) need.set('Praxis', true);
+    if (frame.includes(p.cluster) && !p.gate && !need.has(FRAME_TYPE)) need.set(FRAME_TYPE, true);
     for (const [t, prereq] of need) {
       const target = courseAudience(st, p, t), key = t + '|' + target;
       let g = groups.get(key);
@@ -204,7 +232,8 @@ export function courseCandidates(st, ix, c) {
 export function assessCourse(st, ix, c, pks, opt = {}) {
   const list = pks.filter(pk => ix.pi.has(pk)), taken = courseMembers(st, c.id).length, free = c.seats == null ? null : Math.max(0, c.seats - taken);
   const window = new Map(list.map(pk => [pk, courseWindow(st, ix, ix.people.get(pk), c.type)])), group = opt.group || 'max';
-  const o = { threshold: 'zero', freePolicy: 'adjust', ignoreReplaceable: true, avoidSchool: false, minGroup: 1, ...opt, group, pks: list, start: c.start, end: c.end, window, shiftType: c.type,
+  const mod = hasModules(c) ? { days: courseDayList(ix, c), daysOf: pk => memberDayList(ix, c, ix.people.get(pk)) } : {};
+  const o = { threshold: 'zero', freePolicy: 'adjust', ignoreReplaceable: true, avoidSchool: false, minGroup: 1, ...opt, ...mod, group, pks: list, start: c.start, end: c.end, window, shiftType: c.type,
     maxGroup: group === 'max' ? (free == null ? (opt.maxGroup || 0) : free) : 0 };
   if (group === 'max' && free === 0) return { ok: false, issues: [{ cat: 'Lehrgang', text: 'alle Plätze sind belegt' }], start: c.start, end: c.end, pks: [], asked: list.length, dropped: list.map(pk => ({ pk, cats: ['Platzzahl'] })), days: courseDayList(ix, c), minMargin: null, zeroMargin: null, adjust: 0, offShift: 0, school: 0, threshold: o.threshold, free };
   const res = courseAssess(st, ix, o);
@@ -214,33 +243,76 @@ export function assessCourse(st, ix, c, pks, opt = {}) {
 }
 /** Teilnehmertermin einer Person für einen Lehrgang; die Verlustfaktoren kommen aus ihrem Ausbildungsweg. */
 export function memberEvent(st, ix, c, pk, auto = false) {
-  const p = ix.people.get(pk), f = (p && cfgOf(st, p)?.[c.type]) || {}, dates = courseDayList(ix, c).map(d => ix.cal.iso[d]);
-  if (!dates.length) return null;
+  const p = ix.people.get(pk), f = (p && cfgOf(st, p)?.[c.type]) || {}, dates = memberDayList(ix, c, p).map(d => ix.cal.iso[d]);
+  if (!dates.length) return null;                               // kein Lehrgangstag – oder keines der Module, die die Person braucht
   return { id: uid(), pk, type: c.type, title: c.title, courseKind: 'Lehrgang', courseId: c.id, auto, start: dates[0], end: dates[dates.length - 1], dates,
     trainee: f.trainee ?? 1, mentor: num(f.mentor), tec: num(f.tec), examiner: num(f.examiner), target: p?.target || c.target || '' };
 }
 /**
  * Trägt Personen als Teilnehmer ein. Berechnete und Szenariotermine dieser Personen, die im Lehrgangszeitraum liegen
- * oder dieselbe Art haben, weichen (sie werden bei der nächsten Berechnung neu verteilt). Liefert { added, removed }.
+ * oder dieselbe Art haben, weichen (sie werden bei der nächsten Berechnung neu verteilt). Liefert { added, removed, skipped }.
  */
 export function joinCourse(st, ix, c, pks, { auto = false } = {}) {
-  const have = new Set(courseMembers(st, c.id).map(e => e.pk)), fresh = [...new Set(pks)].filter(pk => ix.pi.has(pk) && !have.has(pk)), set = new Set(fresh), days = new Set(courseDayList(ix, c));
+  const have = new Set(courseMembers(st, c.id).map(e => e.pk)), days = new Map();
+  const fresh = [...new Set(pks)].filter(pk => ix.pi.has(pk) && !have.has(pk) && days.set(pk, new Set(memberDayList(ix, c, ix.people.get(pk)))).get(pk).size > 0), set = new Set(fresh);
   let removed = 0;
   st.events = st.events.filter(e => {
     if (!set.has(e.pk) || !(e.auto || e.synthetic) || e.type === PREP) return true;
-    const hit = e.type === c.type || (ix.evDays.get(e.id) || []).some(d => days.has(d));
+    const hit = e.type === c.type || (ix.evDays.get(e.id) || []).some(d => days.get(e.pk).has(d));
     if (hit) removed++;
     return !hit;
   });
   const evs = fresh.map(pk => memberEvent(st, ix, c, pk, auto)).filter(Boolean);
   st.events.push(...evs);
-  return { added: evs.length, removed };
+  // skipped: Personen, für die in diesem Lehrgang keines der benötigten Module stattfindet
+  const skipped = [...days].filter(([pk, d]) => !d.size && !have.has(pk)).length;
+  return { added: evs.length, removed, ...(skipped ? { skipped } : {}) };
 }
 /** Verschiebt einen Lehrgang samt Teilnehmerterminen auf einen neuen Zeitraum. */
 export function moveCourse(st, ix, c, start, end) {
+  if (hasModules(c)) throw new Error('Der Zeitraum dieses Lehrgangs ergibt sich aus seinen Modulen');
   c.start = start; c.end = end;
-  const dates = courseDayList(ix, c).map(d => ix.cal.iso[d]);
-  for (const e of st.events) if (e.courseId === c.id) { e.start = dates[0] || start; e.end = dates[dates.length - 1] || end; e.dates = dates.slice(); delete e.dayAreas; }
+  syncCourse(st, ix, c);
+}
+/**
+ * Bringt die Teilnehmertermine mit dem Lehrgang in Einklang: nach einer Änderung am Zeitraum, an den Modulen oder an den
+ * Modulen, die eine Person braucht. Bei Modulen ergibt sich der Zeitraum des Lehrgangs aus ihnen. Wer danach an keinem
+ * Tag mehr teilnimmt, wird ausgetragen. Liefert { removed }.
+ */
+export function syncCourse(st, ix, c, onlyPk = null) {
+  if (hasModules(c)) { const s = moduleSpan(c.modules); c.start = s.start; c.end = s.end; }
+  let removed = 0;
+  st.events = st.events.filter(e => {
+    if (e.courseId !== c.id || (onlyPk && e.pk !== onlyPk)) return true;
+    const dates = memberDayList(ix, c, ix.people.get(e.pk)).map(d => ix.cal.iso[d]);
+    if (!dates.length) { removed++; return false; }
+    e.start = dates[0]; e.end = dates[dates.length - 1]; e.dates = dates; delete e.dayAreas;
+    return true;
+  });
+  return { removed };
+}
+/**
+ * Legt die Module eines Lehrgangs fest (mods = Liste 1 … n) oder hebt sie auf (mods = null: alle belegen wieder den ganzen
+ * Zeitraum). Die Teilnehmertermine folgen. Liefert { removed } – ausgetragen wird, wessen Module alle nicht stattfinden.
+ */
+export function setCourseModules(st, ix, c, mods) {
+  const list = mods ? normModules(mods, c.type) : null;
+  if (mods && !list) throw new Error('Mindestens ein Modul muss stattfinden');
+  if (list) c.modules = list; else delete c.modules;
+  return syncCourse(st, ix, c);
+}
+/**
+ * Legt fest, welche Module eine Person braucht (list = Nummern; leer oder alle = keine Einschränkung). Ihre Termine in
+ * Lehrgängen mit Modulen folgen. Liefert { removed }.
+ */
+export function setPersonModules(st, ix, pk, list) {
+  const p = st.people.find(x => x.pk === pk); if (!p) throw new Error('Person nicht gefunden');
+  const mods = normPersonModules(list);
+  if (mods) p.modules = mods; else delete p.modules;
+  const ip = ix.people.get(pk); if (ip && ip !== p) { if (mods) ip.modules = mods; else delete ip.modules; }
+  let removed = 0;
+  for (const c of st.courses || []) if (hasModules(c) && st.events.some(e => e.courseId === c.id && e.pk === pk)) removed += syncCourse(st, ix, c, pk).removed;
+  return { removed };
 }
 export function removeCourse(st, id) {
   const n = st.events.filter(e => e.courseId === id).length;

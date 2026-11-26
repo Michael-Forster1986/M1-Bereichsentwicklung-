@@ -86,6 +86,7 @@ export function rolloverYear(prev, opt = {}) {
     assumptions: prev.meta.assumptions.filter(a => !a.startsWith('Dienstplan aus ')).slice(0, 29) });
   next.config = clone(prev.config); next.routes = clone(prev.routes); next.limits = clone(prev.limits);
   next.measures = clone(prev.measures || []);                       // eigene Schritte gehören zum Weg und ziehen mit um
+  next.measureEdits = clone(prev.measureEdits || {});
   next.settings = { ...clone(prev.settings), start: firstMonday(year) };
   next.school = [];
   if (o.holidays) { next.holidays = holidaysBavaria(year).map(h => h.date); info.holidays = next.holidays.length; }
@@ -97,7 +98,7 @@ export function rolloverYear(prev, opt = {}) {
       delete q.credit;
       if (o.reopen && !isLocked(p)) {                                  // Ziel erreicht: neue Zuordnung ist eine fachliche Entscheidung
         Object.assign(q, { cluster: 'offen', target: '', level: '', confirmed: false, gate: '' });
-        delete q.rotation; delete q.customRoute; delete q.targetAssumed;
+        delete q.rotation; delete q.customRoute; delete q.targetAssumed; delete q.modules;   // auch die benötigten Module gehörten zum erreichten Ziel
         info.reopened++;
       }
     } else if (state === 'partial' && o.credit) {

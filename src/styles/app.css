@@ -214,6 +214,12 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--line-2);backgroun
 .g-months span{position:absolute;top:0;bottom:0;border-left:1px solid var(--line-2);padding:3px 6px;font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden}
 .g-weeks{position:relative;height:15px}
 .g-weeks span{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);padding-left:3px;font-size:10px;color:var(--muted);overflow:hidden}
+/* Beschriftung bleibt beim seitlichen Blättern am linken Rand ihres Abschnitts stehen (clip statt hidden, sonst klebt sie nicht) */
+.g-months span,.g-weeks span{overflow:clip}
+.g-months span em,.g-weeks span em{position:sticky;left:calc(var(--lw) + 6px);font-style:normal;display:inline-block}
+.g-days{position:relative;height:17px;border-top:1px solid var(--line)}
+.g-days span{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);font-size:10.5px;line-height:16px;text-align:center;color:var(--ink-2);overflow:hidden;white-space:nowrap}
+.g-days span.we{background:var(--weekend);color:var(--muted)} .g-days span.ho{background:var(--holiday)}
 .g-cap{display:grid;grid-template-rows:repeat(3,7px);gap:1px;padding-bottom:3px}
 .g-cap div{display:flex}
 .g-cap i{flex:none;display:block;height:7px}
@@ -395,6 +401,23 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--line-2);backgroun
 .cbar.ghost{background:repeating-linear-gradient(135deg,var(--series-soft) 0 6px,var(--surface) 6px 12px);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--series)}
 .cbar.ghost span{text-shadow:none}
 .cbar:focus-visible,.crs-lab:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+/* Module eines Lehrgangs: Eingabe in zwei Spalten (erste und zweite Hälfte), Übersicht als Marken */
+.crs-mods{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 12px;background:var(--surface-2)}
+.mod-ed{display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--rows),auto);grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 26px}
+.mod-h,.mod-r{display:grid;grid-template-columns:34px 30px minmax(0,1fr) minmax(0,1fr);gap:6px;align-items:center}
+.mod-h{font-size:11.5px;color:var(--muted);padding-bottom:1px}
+.mod-r b{font-size:13px}
+.mod-r input[type=checkbox]{width:17px;height:17px;margin:0}
+.mod-r input[type=date]{min-height:30px;padding:2px 6px;font-size:13px;width:100%;min-width:0}
+.mod-r.na b{color:var(--muted);text-decoration:line-through}
+.mod-chips{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:8px}
+.mchip{font-size:12px;border:1px solid var(--line-2);border-radius:6px;padding:2px 7px;background:var(--surface);white-space:nowrap}
+.mchip.na{color:var(--muted);border-style:dashed;background:transparent}
+.mod-pick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 18px}
+.mod-pick label.na{color:var(--muted)}
+.cbar.seg span{padding:0 2px;font-size:10.5px}
+.crs-time .crs-lab small{color:var(--ink-2);font-weight:400}
+@media (max-width:720px){.mod-ed{grid-auto-flow:row;grid-template-rows:none;grid-template-columns:minmax(0,1fr)}.mod-pick{grid-template-columns:minmax(0,1fr)}}
 .crs-strip{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:var(--surface-2)}
 .crs-strip .cells{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));height:18px;border-radius:4px;overflow:hidden;flex:1 1 auto;gap:1px;background:var(--surface)}
 .crs-strip .cells i{display:block;min-width:0}
@@ -430,20 +453,28 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 .rt-sub{font-size:11.5px;color:var(--muted)}
 .rt-f{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:12px;color:var(--ink-2);margin-top:auto;padding-top:4px}
 .rt-st{display:flex;width:70px;height:6px;border-radius:3px;overflow:hidden;flex:none;background:var(--surface-3)}
+/* Stand im Jahresplan mit dem Knopf zur Übernahme; „dirty“ = der Weg wurde geändert und ist noch nicht übernommen */
+.rt-plan{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);padding:8px 12px;margin-bottom:12px;font-size:13px;color:var(--ink-2)}
+.rt-plan b{color:var(--ink)}
+.rt-plan .sp{flex:1}
+.rt-plan.dirty{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,var(--surface))}
 .rt-flow{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding:2px 2px 8px}
 .rt-arrow{align-self:center;color:var(--muted);font-size:20px;flex:none}
 .rt-step{flex:0 0 232px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);overflow:hidden;display:flex;flex-direction:column}
 .rt-top{height:6px}
 .rt-sh{display:flex;align-items:center;gap:8px;padding:10px 12px 2px;font-size:14.5px}
-.rt-sh b{flex:1;font-weight:650}
+.rt-sh b{flex:1;min-width:0;font-weight:650;overflow-wrap:anywhere}
 .rt-no{width:20px;height:20px;border-radius:50%;background:var(--surface-3);color:var(--ink-2);font-size:11.5px;font-weight:650;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .rt-kind{display:flex;align-items:center;gap:6px;padding:2px 12px 8px;flex-wrap:wrap}
-.rt-days{display:flex;align-items:baseline;gap:8px;padding:0 12px 10px;font-size:12.5px;color:var(--ink-2)}
-.rt-days input{width:78px;font-size:22px;font-weight:650;letter-spacing:-.02em;padding:2px 8px;min-height:38px}
+.rt-days{display:flex;align-items:baseline;gap:8px;padding:0 12px 10px;font-size:12.5px;color:var(--ink-2);min-width:0}
+.rt-days span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-days input{flex:none;width:78px;font-size:22px;font-weight:650;letter-spacing:-.02em;padding:2px 8px;min-height:38px}
 .rt-loss{border-top:1px solid var(--line);padding:8px 12px;background:var(--surface-2)}
-.rt-res{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 12px;margin-top:6px}
-.rt-res label{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--ink-2)}
-.rt-res input{width:54px;min-height:28px;padding:2px 5px;font-size:13px;flex:none}
+/* Beschriftung über dem Feld: so ragt auch bei breiterer Schrift nichts in das Eingabefeld daneben */
+.rt-res{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin-top:6px}
+.rt-res label{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:11.5px;color:var(--ink-2)}
+.rt-res label span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rt-res input{width:100%;min-width:0;min-height:28px;padding:2px 6px;font-size:13px}
 .rt-sum{padding:7px 12px;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--line);margin-top:auto}
 .rt-hint{flex:0 0 190px;align-self:center;border:1.5px dashed var(--line-2);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--ink-2);display:flex;flex-direction:column;gap:3px}
 .rt-hint b{color:var(--ink);font-size:13px}
@@ -522,11 +553,37 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 .rt-mv .btn{padding:1px 6px;min-width:0;font-size:12px;line-height:18px}
 .ms-tbl td.c,.ms-tbl th.c{text-align:center;width:64px}
 .ms-tbl input[type=checkbox]{width:17px;height:17px}
-.ms-colors{display:flex;gap:6px;flex-wrap:wrap}
-.ms-colors label{cursor:pointer;display:inline-flex}
+.ms-colors{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ms-colors label{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ms-colors label span{font-size:12.5px;color:var(--ink-2);margin-right:8px}
+.rules-tbl td{vertical-align:top}
+.rules-tbl td:first-child{min-width:260px}
+.rules-tbl td:nth-child(n+2){white-space:nowrap}
+.rules-tbl .row{gap:4px 14px;flex-wrap:nowrap}
 .ms-colors input{position:absolute;opacity:0;pointer-events:none}
 .ms-colors i{width:26px;height:26px;border-radius:7px;display:block;border:2px solid transparent;box-shadow:0 0 0 1px var(--line-2)}
 .ms-colors input:checked + i{border-color:var(--surface);box-shadow:0 0 0 2.5px var(--ink)}
 .ms-colors input:focus-visible + i{outline:2px solid var(--accent);outline-offset:3px}
 .ms-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink-2)}
 .ms-f label.c{color:var(--ink);font-size:13.5px}
+
+/* ---------- Seitenleiste groß; Dienstplan der Person bearbeiten ---------- */
+.drawer.wide{width:min(1180px,calc(100vw - 24px))}
+.pcal i b{display:none;font-style:normal;font-weight:650;line-height:1;pointer-events:none}
+.pcal .dh.minor{visibility:hidden}
+.pcal i.fb{opacity:.45}
+.drawer.wide .pcal{grid-template-columns:40px repeat(31,minmax(0,1fr));gap:3px;font-size:11.5px}
+.drawer.wide .pcal .dh.minor{visibility:visible}
+.drawer.wide .pcal i{display:flex;align-items:center;justify-content:center;border-radius:4px;aspect-ratio:1/.92}
+.drawer.wide .pcal i b{display:block;font-size:12px;color:#0b2545}
+.drawer.wide .pcal i.s-1 b,.drawer.wide .pcal i.s-2 b{color:#fff}
+.pcal.edit i[data-d]{cursor:crosshair;touch-action:none}
+.pcal.edit i[data-d]:hover{outline:2px solid var(--accent);outline-offset:1px}
+.pcal.edit i.paint{outline:2px solid var(--ink);outline-offset:1px}
+body.painting,body.painting *{user-select:none!important}
+.ros-tools{border:1px solid var(--line-2);border-radius:10px;background:var(--surface-2,var(--surface-3));padding:8px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:2px}
+.ros-row{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--line)}
+.ros-row:last-child{border-bottom:0}
+.ros-row > b{flex:0 0 96px;font-size:12.5px;font-weight:650}
+.ros-row label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.ros-row select,.ros-row input[type=date]{min-width:0}

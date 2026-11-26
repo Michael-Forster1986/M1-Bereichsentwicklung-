@@ -10,7 +10,10 @@ export const nf = (v, d = 0) => Number(v).toLocaleString('de-DE', { minimumFract
 export const sgn = (v, d = 1) => (v >= -0.049 ? '+' : '−') + nf(Math.abs(v), d);
 export const fmt = Core.fmtDE, fmtS = Core.fmtShort;
 export const dayLabel = d => WD[IX.cal.dow[d]] + '., ' + fmt(IX.cal.iso[d]);
-export { LEGEND_TYPES, TSHORT, tcls } from './measure-labels.js';
+export { LEGEND_TYPES, TSHORT, tcls, tclsBase, tname } from './measure-labels.js';
+import { tname } from './measure-labels.js';
+/** Auswahlliste von Maßnahmen: Wert ist der Name, angezeigt wird die Bezeichnung. */
+export const typeOpts = list => list.map(t => [t, tname(t)]);
 const tagged = (labels, cls) => Object.fromEntries(Object.keys(labels).map(k => [k, [labels[k], cls[k] || '']]));
 export const REPORT_STATUS = tagged(Core.REPORT_LABELS, { planned: 'good', kept: 'good', partial: 'warn', open: 'crit', blocked: 'crit' });
 export const ROUTE_STATE = tagged(Core.ROUTE_LABELS, { complete: 'good', partial: 'warn', none: 'crit' });

@@ -1,15 +1,19 @@
 import { AREAS, EPS, GATE_TYPES, LOGBOOK, PREP, ROUTE_CLUSTERS } from './constants.js';
-import { isCourse, shiftsOf } from './measures.js';
+import { isCourse, labelOf, shiftsOf } from './measures.js';
 import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
-import { courseAudience } from './courses.js';
+import { courseAudience, courseDayList, memberDayList } from './courses.js';
+import { hasModules } from './modules.js';
+import { FRAME_TYPE, rulesOf } from './rules.js';
 
 // ---------- Planer -----------------------------------------------------
 /**
  * Verteilt die Ausbildungswege auf zulässige Tage. Fixierte Termine zählen zum Weg und
  * werden nie doppelt erzeugt. opt.order = Reihenfolge der Personalnummern.
+ * opt.only = Personalnummern: nur deren Wege werden neu verteilt; alle anderen Termine – auch berechnete –
+ * bleiben stehen und zählen in Kapazität und Lehrgangsplätzen mit.
  */
 export function runPlan(st, ix, opt = {}) {
   const S = st.settings, cal = ix.cal, n = ix.n, cap = ix.cap;
@@ -17,7 +21,8 @@ export function runPlan(st, ix, opt = {}) {
   // Szenariotermine werden nur ersetzt, wenn der Planer sie neu erzeugen kann (Schritt gehört zum Weg der Person);
   // simulierte Kursrahmen außerhalb des Wegs bleiben als Voraussetzung stehen.
   const regen = e => { const p = ix.people.get(e.pk), r = p && routeOf(st, p); return !!r && (r.includes(e.type) || e.type === PREP); };
-  const keep = st.events.filter(e => !e.auto && !(replaceSynthetic && e.synthetic && regen(e)));
+  const only = opt.only ? new Set(opt.only) : null;
+  const keep = st.events.filter(e => (only && !only.has(e.pk)) || (!e.auto && !(replaceSynthetic && e.synthetic && regen(e))));
   const L = newLoad(n), occ = new Array(st.people.length).fill(null), fixedBy = new Map();
   const occOf = i => occ[i] || (occ[i] = new Uint8Array(n));
   for (const e of keep) {
@@ -31,9 +36,11 @@ export function runPlan(st, ix, opt = {}) {
   // Lehrgänge als Block: Kurs-Schritte werden nicht tageweise verteilt, sondern über einen Platz in einem Lehrgangstermin belegt
   const blocks = S.courseBlocks === true && Array.isArray(st.courses), courseDays = new Map(), seatUse = new Map();
   if (blocks) {
-    for (const x of st.courses) { const ds = []; for (let d = Math.max(0, cal.idx(x.start)), b = Math.min(n - 1, cal.idx(x.end)); d <= b; d++) if (ix.work[d]) ds.push(d); courseDays.set(x.id, ds); }
+    for (const x of st.courses) courseDays.set(x.id, courseDayList(ix, x));
     for (const e of keep) if (e.courseId) seatUse.set(e.courseId, (seatUse.get(e.courseId) || 0) + 1);
   }
+  const lab = t => labelOf(st, t);                       // Bezeichnung für Meldungen
+  const rules = rulesOf(st);                             // Regeln der Vorgabe, soweit das Projekt sie nicht geändert hat
   const prepShifts = shiftsOf(st, PREP);               // Dienste, in denen der Vorbereitungstag vor einer ICA liegen darf
   let mode = S.goal;                                    // aktuell geprüfte Grenze: 'zero' oder 'min'
   const buf = Math.max(0, num(S.buffer));              // Planungspuffer in Köpfen über der Grenze
@@ -66,6 +73,7 @@ export function runPlan(st, ix, opt = {}) {
   };
 
   for (const pk of seq) {
+    if (only && !only.has(pk)) continue;
     const p = ix.people.get(pk), i = ix.pi.get(pk), fixed = fixedBy.get(pk) || [];
     const open = reason => report.push({ pk, status: 'open', reason });
     if (isLocked(p) || p.cluster === 'offen') { report.push({ pk, status: 'skipped', reason: isLocked(p) ? 'Ausgeschlossen / gesperrt' : 'Cluster offen' }); continue; }
@@ -74,13 +82,14 @@ export function runPlan(st, ix, opt = {}) {
     if (S.confirmedOnly && !p.confirmed) { open('Voraussetzungen nicht bestätigt; fixierte Termine bleiben erhalten'); continue; }
     if (p.cluster === '5') {
       if (!p.target || !p.level) { open('Zielmuster und Zielstufe fehlen'); continue; }
-      if (p.target === 'A320') { open('A320 gemäß Vorgängerregel zurückgestellt'); continue; }
-      if (p.target.includes('Kombikurs') && p.level !== 'TEC') { open('Kombikurs nur für Zielstufe TEC'); continue; }
+      if (rules.deferA320 && p.target === 'A320') { open('A320 gemäß Vorgängerregel zurückgestellt'); continue; }
+      if (rules.kombiTecOnly && p.target.includes('Kombikurs') && p.level !== 'TEC') { open('Kombikurs nur für Zielstufe TEC'); continue; }
     }
-    const needsFrame = ['3', '4B'].includes(p.cluster);
-    if (needsFrame && !p.gate && !fixed.some(e => e.type === 'Praxis') && !creditOf(p, 'Praxis')) {
-      // Im Blockmodus sucht der Planer selbst einen Platz im Praxis-Lehrgang; der Weg beginnt danach
-      if (blocks && !route.includes('Praxis')) route = ['Praxis', ...route];
+    const needsFrame = rules.frame.includes(p.cluster);
+    if (needsFrame && !p.gate && !fixed.some(e => e.type === FRAME_TYPE) && !creditOf(p, FRAME_TYPE)) {
+      // Im Blockmodus sucht der Planer selbst einen Platz im Praxis-Lehrgang; der Weg beginnt danach.
+      // Steht der Lehrgang schon im Weg, plant ihn der Weg an seiner Stelle.
+      if (blocks) { if (!route.includes(FRAME_TYPE)) route = [FRAME_TYPE, ...route]; }
       else { open('Praxis-Kursrahmen oder Abschlussdatum aller Doings fehlt'); continue; }
     }
     const o = occOf(i);
@@ -97,23 +106,25 @@ export function runPlan(st, ix, opt = {}) {
     const attempt = tier => {
       mode = tier === 'mixed' ? 'zero' : tier;
       let cursor = p.start && validDate(p.start) ? clamp(cal.idx(p.start), 0, n) : startDefault;
-      if (needsFrame) for (const e of fixed) if (e.type === 'Praxis') cursor = Math.max(cursor, endIdx(e) + 1);
+      if (needsFrame) for (const e of fixed) if (e.type === FRAME_TYPE) cursor = Math.max(cursor, endIdx(e) + 1);
       const local = [], log = [], seatLog = [];
       let reason = '', hardFail = false, failed = false, remaining = null;
       const undo = cnt => { while (cnt-- > 0 && log.length) { const [k, d, sum, m, t, x, occupied] = log.pop(); if (k >= 0) { L.loss[k][d] -= sum; L.mentor[k][d] -= m; L.tec[k][d] -= t; L.exam[k][d] -= x; } if (occupied) o[d] = 0; } };
       const undoAll = () => { undo(log.length); for (const id of seatLog.splice(0)) seatUse.set(id, seatUse.get(id) - 1); };
       for (let r = 0; r < route.length; r++) {
         const t = route[r], c = cfg[t];
-        if (!c || !Number.isInteger(c.days) || c.days < 1 || c.trainee == null) { reason = 'Dauer oder Produktivitätsverlust fehlt: ' + t; hardFail = true; break; }
+        if (!c || !Number.isInteger(c.days) || c.days < 1 || c.trainee == null) { reason = 'Dauer oder Produktivitätsverlust fehlt: ' + lab(t); hardFail = true; break; }
         const fs = fixed.filter(e => e.type === t), count = fs.reduce((s, e) => s + dayCount(e), 0) + creditOf(p, t);   // Vorleistung aus Vorjahren zählt wie fixierte Tage
         for (const e of fs) cursor = Math.max(cursor, endIdx(e) + 1);
         const course = blocks && isCourse(st, t);
         if (course && fs.some(e => e.courseId || e.courseKind)) continue;      // Teilnahme an einem Lehrgang erfüllt den Schritt
         if (count >= c.days) continue;
         if (course) {
+          const daysFor = x => hasModules(x) ? memberDayList(ix, x, p) : courseDays.get(x.id) || [];   // Teilbeleger belegen nur ihre Module
           const sum = c.trainee + c.mentor + c.tec + c.examiner, aud = courseAudience(st, p, t), offers = st.courses.filter(x => x.type === t && (x.target || '') === aud), why = new Map();
           const obstacle = x => {
-            const ds = courseDays.get(x.id) || [];
+            const ds = daysFor(x);
+            if (!ds.length && hasModules(x)) return 'keines der benötigten Module findet statt';
             if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
             if (x.seats != null && (seatUse.get(x.id) || 0) >= x.seats) return 'ausgebucht';
             for (const d of ds) { if (ix.abs[i][d]) return 'Abwesenheit'; if (o[d]) return 'Terminkollision'; }
@@ -129,16 +140,16 @@ export function runPlan(st, ix, opt = {}) {
           if (tier === 'mixed') mode = 'zero';
           if (!hit) {
             failed = true;
-            reason = offers.length ? 'Kein passender Lehrgangstermin für ' + t + ' (' + [...why].sort((a, b) => b[1] - a[1]).map(x => x[0]).join(', ') + ')'
-              : 'Kein Lehrgangstermin für ' + t + (aud ? ' ' + aud : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
-            remaining = [t + ': Lehrgang'];
+            reason = offers.length ? 'Kein passender Lehrgangstermin für ' + lab(t) + ' (' + [...why].sort((a, b) => b[1] - a[1]).map(x => x[0]).join(', ') + ')'
+              : 'Kein Lehrgangstermin für ' + lab(t) + (aud ? ' ' + aud : '') + ' vorhanden – unter „Lehrgänge“ anlegen oder einspielen';
+            remaining = [lab(t) + ': Lehrgang'];
             for (let q = r + 1; q < route.length; q++) {
               const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);
-              if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (isCourse(st, route[q]) ? 'Lehrgang' : (c2.days - have) + ' Tage'));
+              if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(lab(route[q]) + ': ' + (isCourse(st, route[q]) ? 'Lehrgang' : (c2.days - have) + ' Tage'));
             }
             break;
           }
-          const ds = courseDays.get(hit.id);
+          const ds = daysFor(hit);
           for (const d of ds) {
             const k = assign(ix, i, d); o[d] = 1;                                // dienstfreie Lehrgangstage: Dienstplananpassung ohne Produktionsverlust
             if (k >= 0) { L.loss[k][d] += sum; L.mentor[k][d] += c.mentor; L.tec[k][d] += c.tec; L.exam[k][d] += c.examiner; log.push([k, d, sum, c.mentor, c.tec, c.examiner, 1]); }
@@ -159,7 +170,7 @@ export function runPlan(st, ix, opt = {}) {
           if (cursor <= gate) cursor = gate + 1;
           // Vor einer neu geplanten ICA liegt ein Tag Vorbereitung. Steht die ICA am Anfang (als erster Schritt des Wegs oder
           // weil alles davor schon erbracht ist), beginnt sie frühestens nach dem ersten dafür möglichen Diensttag.
-          if (!route.includes(PREP) && !fixed.some(e => e.type === PREP) && !local.some(e => e.type === PREP)) {
+          if (rules.autoPrep && !route.includes(PREP) && !fixed.some(e => e.type === PREP) && !local.some(e => e.type === PREP)) {
             let first = -1;
             for (let d = 0; d < n && first < 0; d++) { if (!ix.work[d] || ix.abs[i][d]) continue; const k = assign(ix, i, d); if (k >= 0 && prepShifts[k % 3]) first = d; }
             if (first >= 0 && cursor <= first) cursor = first + 1;
@@ -184,11 +195,11 @@ export function runPlan(st, ix, opt = {}) {
         if (ds.length < need && tier === 'mixed' && !rot) { mode = 'min'; scan(); mode = 'zero'; ds.sort((a, b) => a - b); }
         if (ds.length < need) {
           failed = true;
-          reason = 'Nicht genügend zulässige Tage für ' + t + ' (' + ds.length + '/' + need + ')';
-          remaining = [t + ': ' + (need - ds.length) + ' Tage'];
+          reason = 'Nicht genügend zulässige Tage für ' + lab(t) + ' (' + ds.length + '/' + need + ')';
+          remaining = [lab(t) + ': ' + (need - ds.length) + ' Tage'];
           for (let q = r + 1; q < route.length; q++) {
             const c2 = cfg[route[q]], have = fixed.filter(e => e.type === route[q]).reduce((s, e) => s + dayCount(e), 0) + creditOf(p, route[q]);
-            if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(route[q] + ': ' + (c2.days - have) + ' Tage');
+            if (c2 && Number.isInteger(c2.days) && c2.days - have > 0) remaining.push(lab(route[q]) + ': ' + (c2.days - have) + ' Tage');
           }
           if (allowPartial && ds.length) local.push(mk(t, ds, dayAreas, c, true)); else undo(ds.length);
           break;
@@ -202,7 +213,7 @@ export function runPlan(st, ix, opt = {}) {
       }
       // Vorbereitung vor einer neu geplanten ICA: reiner Prüfer-/TEC-Aufwand, Teilnehmer bleibt produktiv
       const ica = local.find(e => e.type === 'ICA');
-      if (ica && !fixed.some(e => e.type === PREP) && !local.some(e => e.type === PREP)) {
+      if (rules.autoPrep && ica && !fixed.some(e => e.type === PREP) && !local.some(e => e.type === PREP)) {
         const tec = p.cluster === '1' ? 1 : 0, exam = 1 - tec;
         let prep = null;
         for (const m of (tier === 'mixed' ? ['zero', 'min'] : [mode])) {
@@ -243,6 +254,13 @@ export function runPlan(st, ix, opt = {}) {
     if (res.state === 'partial') report.push({ pk, status: 'partial', reason: res.reason + ' · ' + local.length + ' Maßnahmen bis ' + fmtDE(lastEnd), remaining: res.remaining });
     else if (local.length) report.push({ pk, status: 'planned', reason: local.length + ' neue Maßnahmen · Abschluss ' + fmtDE(lastEnd) + (fixed.length ? ' · ' + fixed.length + ' fixierte Termine berücksichtigt' : '') });
     else report.push({ pk, status: 'kept', reason: p.credit && !fixed.length ? 'Weg durch Vorleistungen aus Vorjahren abgedeckt; keine neuen Termine nötig' : 'Weg durch ' + fixed.length + ' fixierte Termine' + (p.credit ? ' und Vorleistungen aus Vorjahren' : '') + ' abgedeckt; keine neuen Termine nötig' });
+  }
+  if (only) {
+    // Bericht der übrigen Personen bleibt, wie er war; die neu verteilten Personen bekommen ihren neuen Eintrag an alter Stelle
+    const fresh = new Map(report.map(r => [r.pk, r])), merged = [];
+    for (const r of st.report || []) { if (!only.has(r.pk)) merged.push(r); else if (fresh.has(r.pk)) { merged.push(fresh.get(r.pk)); fresh.delete(r.pk); } }
+    merged.push(...fresh.values());
+    return { events, report: merged, ledger: L };
   }
   return { events, report, ledger: L };
 }
@@ -299,6 +317,14 @@ export function planVariants(st, count = 16, seed = 7) {
     list.push(by('Priorität, Zufallsvariante ' + v, (a, b) => key.get(a.pk) - key.get(b.pk)));
   }
   return list.slice(0, Math.max(1, count));
+}
+/**
+ * Übernimmt geänderte Wege in den Plan: verteilt nur die Wege der genannten Personen neu. Alle anderen Termine bleiben
+ * unverändert stehen. Mehrere Personen werden in einigen Reihenfolgen probiert; die beste gewinnt.
+ */
+export function replanPeople(st, ix, pks, opt = {}) {
+  const only = [...new Set(pks)].filter(pk => ix.people.has(pk));
+  return optimizePlan(st, ix, { variants: only.length > 1 ? 8 : 1, ...opt, only });
 }
 /** Probiert mehrere Reihenfolgen und liefert das beste Ergebnis (kein globaler Optimalitätsnachweis). */
 export function optimizePlan(st, ix, opt = {}) {

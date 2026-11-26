@@ -58,14 +58,17 @@ export function checkPlacement(st, ix, o) {
     return r;
   };
   const allowWarn = S.goal === 'min' && S.preferZero === false;
-  for (let d = Math.max(0, o.start); d < ix.n && res.days.length < o.len; d++) {
-    if (!ix.work[d]) continue;
+  const take = d => {
+    if (!ix.work[d]) return;
     const r = look(d);
-    if (r.skip) { res.skipped++; continue; }
-    if (o.spread && (r.state === 'crit' || (r.state === 'warn' && !allowWarn))) continue;
+    if (r.skip) { res.skipped++; return; }
+    if (o.spread && (r.state === 'crit' || (r.state === 'warn' && !allowWarn))) return;
     res.days.push(d); res.perDay.push(r);
     if (r.state === 'crit') res.crit++; else if (r.state === 'warn') res.warn++; else if (r.state === 'note') res.notes++;
-  }
+  };
+  // o.days: die Tage stehen fest (Lehrgang mit Modulen – dazwischen liegen freie Tage); sonst ab o.start die nächsten o.len Tage
+  if (Array.isArray(o.days)) for (const d of o.days) take(d);
+  else for (let d = Math.max(0, o.start); d < ix.n && res.days.length < o.len; d++) take(d);
   res.short = res.days.length < o.len;
   if (res.days.length) { res.start = ix.cal.iso[res.days[0]]; res.end = ix.cal.iso[res.days[res.days.length - 1]]; }
   res.ok = !res.short && !res.crit && !res.warn;

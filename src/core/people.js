@@ -1,3 +1,5 @@
+import { normPersonModules } from './modules.js';
+import { rulesOf } from './rules.js';
 import { AREAS, CLUSTERS, LEVELS, PATTERNS, SHIFTS, TARGETS, TYPES } from './constants.js';
 import { clamp, fin, num, truthy } from './util.js';
 import { normDate } from './dates.js';
@@ -40,6 +42,8 @@ export function normPerson(p, types = TYPES) {
     out.customRoute = { steps: [...new Set(p.customRoute.steps.filter(t => types.includes(t)))], config: cfg };   // die Reihenfolge legt der Mensch fest
   }
   if (p.targetAssumed) out.targetAssumed = true;
+  const modules = normPersonModules(p.modules);                 // nur bestimmte Module (Teilbeleger); ohne Angabe: alle
+  if (modules) out.modules = modules;
   const credit = normCredit(p.credit, types);
   if (credit) out.credit = credit;
   return out;
@@ -68,5 +72,6 @@ export function assignAliases(people, rnd = Math.random) {
   const width = Math.max(3, String(next + todo.length).length);
   for (const p of todo) { p.alias = 'P-' + String(next++).padStart(width, '0'); }
 }
-export const routeOf = (st, p) => p.customRoute?.steps || (p.cluster === '5' && p.level === 'TEC' ? ['Theorie', 'Praxis'] : st.routes[p.cluster] || null);
+/** Der Weg einer Person: ihr individueller, sonst für Cluster 5 mit Zielstufe TEC der TEC-Weg aus den Regeln, sonst der ihres Clusters. */
+export const routeOf = (st, p) => p.customRoute?.steps || (p.cluster === '5' && p.level === 'TEC' ? rulesOf(st).tecRoute : st.routes[p.cluster] || null);
 export const cfgOf = (st, p) => p.customRoute?.config || st.config[p.cluster] || null;
