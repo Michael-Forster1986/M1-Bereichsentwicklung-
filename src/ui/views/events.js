@@ -25,7 +25,7 @@ VIEWS.events = {
     <div class="view-head"><div><h1>Termine</h1><p>Alle Maßnahmen des Jahres. Berechnete Termine werden bei jeder Neuberechnung neu verteilt, fixierte bleiben stehen und zählen zum Ausbildungsweg.</p></div></div>
     <div class="toolbar noprint">
       <input type="search" placeholder="Person oder Maßnahme suchen" value="${UI.evQ}" data-inp="ui" data-f="evQ" id="q-events" style="width:220px" aria-label="Suche">
-      <select data-chg="ui" data-f="evType" aria-label="Maßnahme"><option value="">Alle Maßnahmen</option>${opts([...Core.TYPES, 'Sonstiges'], UI.evType)}</select>
+      <select data-chg="ui" data-f="evType" aria-label="Maßnahme"><option value="">Alle Maßnahmen</option>${opts([...Core.typesOf(S), 'Sonstiges'], UI.evType)}</select>
       <select data-chg="ui" data-f="evOrigin" aria-label="Herkunft">${opts([['', 'Alle Herkünfte'], ['berechnet', 'Berechnet'], ['fixiert', 'Fixiert'], ['Szenario', 'Szenario (simuliert)'], ['Konflikt', 'Mit Konflikt']], UI.evOrigin)}</select>
       <select data-chg="ui" data-f="cluster" aria-label="Cluster"><option value="">Alle Cluster</option>${opts(Object.keys(Core.CLUSTERS).map(k => [k, clusterLabel(k)]), UI.cluster)}</select>
       <span class="sp"></span>

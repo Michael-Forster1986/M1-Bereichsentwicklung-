@@ -1,4 +1,5 @@
-import { AREAS, EPS, LOGBOOK, PREP, isCourseType } from './constants.js';
+import { AREAS, EPS, PREP } from './constants.js';
+import { isCourse, shiftIssue, shiftOk } from './measures.js';
 import { num } from './util.js';
 import { cfgOf, creditOf } from './people.js';
 import { assign, eventK } from './indexing.js';
@@ -23,7 +24,7 @@ export function elementFor(st, ix, p, type) {
  * Liefert { days, perDay: [{ d, state 'ok'|'warn'|'crit'|'note', why, after, zero, min }], ok, crit, warn, notes, skipped, short, start, end }.
  */
 export function checkPlacement(st, ix, o) {
-  const i = ix.pi.get(o.pk), S = st.settings, c = ix.cap, L = ix.load, f = o.factors || {}, course = isCourseType(o.type);
+  const i = ix.pi.get(o.pk), S = st.settings, c = ix.cap, L = ix.load, f = o.factors || {}, course = isCourse(st, o.type);
   const res = { days: [], perDay: [], ok: false, crit: 0, warn: 0, notes: 0, skipped: 0, short: false, start: '', end: '', len: o.len };
   if (i === undefined || !(o.len > 0)) { res.short = true; return res; }
   const m = num(f.mentor), t = num(f.tec), x = num(f.examiner), sum = num(f.trainee) + m + t + x;
@@ -44,7 +45,7 @@ export function checkPlacement(st, ix, o) {
       else r.skip = 'Kein Dienst / Frei';
       return r;
     }
-    if (!course && o.type !== LOGBOOK && k % 3 !== 0) r.skip = 'Außerhalb Frühdienst';
+    if (!course && !shiftOk(st, o.type, k)) r.skip = shiftIssue(st, o.type);
     if (r.skip) return r;
     const mine = own.get(k * 1000 + d) || [0, 0, 0, 0];
     if (m > 0 && S.mentorLimit != null && L.mentor[k][d] - mine[1] + m > S.mentorLimit + EPS) (S.cap ? bad : soft)('Mentoren ausgeschöpft');

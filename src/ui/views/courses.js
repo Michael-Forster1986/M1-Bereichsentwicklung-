@@ -96,7 +96,7 @@ function detail(c) {
       <button class="btn sm danger" data-act="crs-delete" data-id="${c.id}">Lehrgang löschen</button><button class="btn sm" data-act="crs-select" data-id="">Schließen</button></div>
     <div class="form" style="margin:10px 0 12px;grid-template-columns:minmax(180px,2fr) repeat(5,minmax(110px,1fr))">
       <label class="f">Bezeichnung<input type="text" maxlength="80" value="${c.title}" data-chg="crs" data-f="title"></label>
-      <label class="f">Art<select data-chg="crs" data-f="type">${opts(Core.COURSE_TYPES, c.type)}</select></label>
+      <label class="f">Art<select data-chg="crs" data-f="type">${opts(Core.courseTypesOf(S), c.type)}</select></label>
       <label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select data-chg="crs" data-f="target">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], c.target)}</select></label>
       <label class="f">Beginn<input type="date" value="${c.start}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="start"></label>
       <label class="f">Ende<input type="date" value="${c.end}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="end"></label>
@@ -168,18 +168,19 @@ CHG.crs = t => {
   });
 };
 ACT['crs-new'] = t => {
-  const type = Core.COURSE_TYPES.includes(t.dataset.t) ? t.dataset.t : 'Theorie', target = t.dataset.target || '', yr = String(S.meta.year);
+  const type = Core.courseTypesOf(S).includes(t.dataset.t) ? t.dataset.t : 'Theorie', target = t.dataset.target || '', yr = String(S.meta.year);
   const cfgDays = Core.courseDemand(S, IX).find(g => g.type === type && g.target === target)?.days || '';
   openModal({ title: 'Lehrgang anlegen', body: html`
     <p class="ink2">Ein Lehrgang ist ein fester Zeitraum mit Plätzen. Teilnehmer tragen Sie danach ein – einzeln oder als beste Besetzung.</p>
     <div class="form"><label class="f" style="grid-column:1/-1">Bezeichnung<input type="text" id="cnTitle" maxlength="80" value="${uniqueTitle(defaultTitle(type, target))}" autofocus></label>
-      <label class="f">Art<select id="cnType">${opts(Core.COURSE_TYPES, type)}</select></label><label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select id="cnTarget">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], target)}</select></label>
+      <label class="f">Art<select id="cnType">${opts(Core.courseTypesOf(S), type)}</select></label><label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select id="cnTarget">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], target)}</select></label>
       <label class="f">Beginn<input type="date" id="cnStart" min="${yr}-01-01" max="${yr}-12-31" value="${S.settings.start}"></label><label class="f">Ende<input type="date" id="cnEnd" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Plätze<input type="number" id="cnSeats" min="1" max="500" value="12" style="width:100%"></label></div>
     <p class="small muted">${cfgDays ? 'Der Ausbildungsweg sieht ' + cfgDays + ' Arbeitstage vor. ' : ''}Es zählen die Arbeitstage (Mo–Fr, ohne Feiertage) zwischen Beginn und Ende.</p>`,
     footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Lehrgang anlegen</button>`,
     handlers: { ok: () => {
-      const c = Core.normCourse({ type: $('#cnType').value, title: $('#cnTitle').value, target: $('#cnTarget').value, start: $('#cnStart').value, end: $('#cnEnd').value, seats: +$('#cnSeats').value || null });
+      // eigene Schritte sind musterunabhängig: ein Zielmuster würde den Lehrgang für niemanden passend machen
+      const type = $('#cnType').value, c = Core.normCourse({ type, title: $('#cnTitle').value, target: Core.measureOf(S, type) ? '' : $('#cnTarget').value, start: $('#cnStart').value, end: $('#cnEnd').value, seats: +$('#cnSeats').value || null }, Core.courseTypesOf(S));
       if (!c || !c.start.startsWith(yr) || !c.end.startsWith(yr)) return toast('Zeitraum prüfen: Beginn und Ende müssen im Jahr ' + yr + ' liegen', 'crit');
       closeModal();
       if (commit('Lehrgang angelegt – jetzt Teilnehmer eintragen', () => { S.courses.push(c); S.courses.sort((a, b) => a.start < b.start ? -1 : 1); })) { select(c.id); render(); }
@@ -244,7 +245,7 @@ function takeProposals(list) {
   const Pr = state().prop, o = Pr.params; let first = '', people = 0;
   commit('', () => {
     for (const a of list) {
-      const c = Core.normCourse({ type: o.type, title: uniqueTitle(o.title), target: o.target, start: a.start, end: a.end, seats: o.maxGroup });
+      const c = Core.normCourse({ type: o.type, title: uniqueTitle(o.title), target: o.target, start: a.start, end: a.end, seats: o.maxGroup }, Core.courseTypesOf(S));
       S.courses.push(c); first = first || c.id;
       people += Core.joinCourse(S, Core.buildIndex(S), c, a.pks).added;
     }

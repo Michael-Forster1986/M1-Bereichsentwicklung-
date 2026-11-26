@@ -3,6 +3,7 @@ import { clone } from './util.js';
 import { addDays, firstMonday, holidaysBavaria, makeCalendar } from './dates.js';
 import { emptyState } from './defaults.js';
 import { isLocked, normCredit, normPerson } from './people.js';
+import { typesOf } from './measures.js';
 import { decodeRoster, encodeRoster } from './roster.js';
 import { buildIndex } from './indexing.js';
 import { routeProgress } from './summary.js';
@@ -65,7 +66,7 @@ const lastEnd = (ix, pk, types) => (ix.evByPerson.get(pk) || []).filter(e => typ
 export function carriedCredit(prev, ix, p) {
   const pr = routeProgress(prev, ix, p);
   if (pr.state !== 'partial') return null;
-  return normCredit(Object.fromEntries(pr.steps.filter(s => s.have > 0).map(s => [s.type, s.have])));
+  return normCredit(Object.fromEntries(pr.steps.filter(s => s.have > 0).map(s => [s.type, s.have])), typesOf(prev));
 }
 /**
  * Legt aus einem Planungsjahr das Folgejahr an. Übernommen werden Personen, Ausbildungswege, Grenzwerte und
@@ -84,6 +85,7 @@ export function rolloverYear(prev, opt = {}) {
     dataClass: prev.meta.dataClass === 'empty' && prev.people.length ? 'real' : prev.meta.dataClass, source: 'Übernahme aus dem Planungsjahr ' + from, privacy: !!prev.meta.privacy,
     assumptions: prev.meta.assumptions.filter(a => !a.startsWith('Dienstplan aus ')).slice(0, 29) });
   next.config = clone(prev.config); next.routes = clone(prev.routes); next.limits = clone(prev.limits);
+  next.measures = clone(prev.measures || []);                       // eigene Schritte gehören zum Weg und ziehen mit um
   next.settings = { ...clone(prev.settings), start: firstMonday(year) };
   next.school = [];
   if (o.holidays) { next.holidays = holidaysBavaria(year).map(h => h.date); info.holidays = next.holidays.length; }
@@ -103,7 +105,7 @@ export function rolloverYear(prev, opt = {}) {
       if (credit) { q.credit = credit; info.continued++; info.creditDays += Object.values(credit).reduce((s, v) => s + v, 0); }
       if (!q.gate) q.gate = lastEnd(ix, p.pk, GATE_TYPES);              // Kurse des Vorjahres gelten als Voraussetzung der ICA
     } else if (state === 'partial') delete q.credit;
-    next.people.push(normPerson(q));
+    next.people.push(normPerson(q, typesOf(prev)));
   }
   if (o.roster) {
     // Gleicher Wochentag 52 Wochen zuvor – setzt Wochen- und Vier-Wochen-Rhythmen nahtlos fort

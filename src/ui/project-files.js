@@ -3,7 +3,7 @@ import { desktop, isDesktop } from '../platform/desktop.js';
 import { download, fname, pickFile, snapshotHtml } from './files.js';
 import { $, html } from './dom.js';
 import { nf } from './format.js';
-import { DOC, PRJ, S, UI, markSaved, projectClass, replaceProject, replaceState } from './state.js';
+import { DOC, PRJ, S, UI, markSaved, projectClass, replaceProject, replaceState, setPractice } from './state.js';
 import { closeModal, openModal, toast } from './dialogs.js';
 import { ACT } from './registry.js';
 import { go, render, renderTop } from './shell.js';
@@ -67,12 +67,12 @@ ACT['load-project'] = async () => {
   presentLoad(await file.text(), file.name);
 };
 ACT['open-recent'] = async t => { const f = await desktop.openRecent(+t.dataset.i); if (f) presentLoad(f.text, f.name, { token: f.token, name: f.name, path: f.path }); };
-ACT['load-demo'] = () => openModal({ title: 'Demo-Daten erzeugen', body: html`
+ACT['load-demo'] = () => openModal({ title: 'Übungsdaten erzeugen', body: html`
     <p>Erzeugt einen vollständig synthetischen Datensatz: erfundene Personen, zufälliger Dienstplan und Urlaub, berechneter Jahresplan. Es werden keine realen Daten verwendet.</p>
     <div class="form"><label class="f">Planungsjahr<input type="number" id="demoYear" min="2024" max="2040" value="${S ? S.meta.year : 2027}"></label>
     <label class="f">Anzahl Personen<input type="number" id="demoCount" min="10" max="600" value="141"></label></div>`,
-  footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Demo-Daten erzeugen</button>`,
-  handlers: { ok: () => { const year = Core.clamp(+$('#demoYear').value || 2027, 2024, 2040), count = Core.clamp(+$('#demoCount').value || 141, 10, 600); closeModal(); replaceState(Core.demoState({ year, count, seed: year + count }), 'Demo-Daten erzeugt'); go('overview'); } } });
+  footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok">Übungsdaten erzeugen</button>`,
+  handlers: { ok: () => { const year = Core.clamp(+$('#demoYear').value || 2027, 2024, 2040), count = Core.clamp(+$('#demoCount').value || 141, 10, 600); closeModal(); setPractice(true); replaceState(Core.demoState({ year, count, seed: year + count }), 'Übungsdaten erzeugt – der Übungsmodus ist eingeschaltet'); go('overview'); } } });
 ACT['new-empty'] = () => openModal({ title: 'Leeres Projekt anlegen', body: html`
     <p>Legt ein Projekt ohne Personen an. Ausbildungswege, Grenzwerte und Krankenreserve werden mit den Standardwerten vorbelegt. Danach Stammdaten, Dienstplan und Abwesenheiten importieren.</p>
     <div class="form"><label class="f">Planungsjahr<input type="number" id="newYear" min="2024" max="2040" value="${S.meta.year}"></label></div>`,

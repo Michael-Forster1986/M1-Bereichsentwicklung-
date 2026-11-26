@@ -2,6 +2,7 @@ import * as Core from '../core/index.js';
 import { desktop, isDesktop } from '../platform/desktop.js';
 import { toast } from './dialogs.js';
 import { render } from './shell.js';
+import { syncMeasures } from './measure-labels.js';
 
 // ---------- Zustand --------------------------------------------------------
 // PRJ ist das Projekt (ein oder mehrere Planungsjahre), S der Stand des aktiven Jahres.
@@ -17,7 +18,7 @@ export const UI = {
   capArea: 0, capRange: 'year', capOnlyCrit: true, evQ: '', evType: '', evOrigin: '', repStatus: '', absQ: '',
   routeCluster: '1', routePerson: '', drawer: null, tec: null, tecResult: null, limit: 300
 };
-export const LS = { state: 'm1cockpit.v4.state', project: 'm1cockpit.v5.project', on: 'm1cockpit.v4.autosave', theme: 'm1cockpit.theme' };
+export const LS = { state: 'm1cockpit.v4.state', project: 'm1cockpit.v5.project', on: 'm1cockpit.v4.autosave', theme: 'm1cockpit.theme', practice: 'm1cockpit.practice' };
 export const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } },
@@ -35,6 +36,7 @@ export const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'b
 export const years = () => Core.projectYears(PRJ);
 
 export function recompute() {
+  syncMeasures(S);
   IX = Core.buildIndex(S);
   SUM = Core.summarize(S, IX);
   CONF = new Map(Core.findConflicts(S, IX).map(c => [c.id, c]));
@@ -114,6 +116,8 @@ export function redo() { if (!future.length) return toast('Nichts zu wiederholen
 export function replaceProject(prj, label, doc = null) {
   if (PRJ) { push(hist, snapProject()); future.length = 0; }
   PRJ = prj; S = PRJ.years[PRJ.active];
+  // Wer ein eigenes Projekt öffnet oder anlegt, verlässt damit den Übungsmodus
+  if (practiceOn() && years().some(y => PRJ.years[y].meta.dataClass !== 'demo')) setPractice(false);
   resetSelection(); UI.cluster = ''; UI.q = ''; UI.routePerson = '';
   Object.assign(DOC, { token: '', name: '', path: '' }, doc || {});
   recompute(); markSaved(); render(); autosave();
@@ -140,6 +144,9 @@ export function resetAll(st) {
 
 // ---------- Zwischenspeichern / Wiederherstellung ---------------------------
 /** Browser: Zwischenspeicher im Browserprofil · Desktop: Wiederherstellungskopie im Benutzerprofil. Beides nur auf Wunsch. */
+/** Übungsmodus: das Programm startet mit simulierten Daten statt leer (siehe ui/practice.js). */
+export const practiceOn = () => isDesktop ? desktop.settings.get('practice') === true : store.get(LS.practice) === '1';
+export function setPractice(on) { if (isDesktop) desktop.settings.set('practice', !!on); else if (on) store.set(LS.practice, '1'); else store.del(LS.practice); }
 export const autosaveOn = () => isDesktop ? desktop.settings.get('recovery') === true : store.get(LS.on) === '1';
 export function setAutosave(on) {
   if (isDesktop) { desktop.settings.set('recovery', !!on); if (!on) desktop.recovery.clear(); }

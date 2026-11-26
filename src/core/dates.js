@@ -66,3 +66,5 @@ export function holidaysBavaria(y) {
     [fix(12, 25), '1. Weihnachtstag'], [fix(12, 26), '2. Weihnachtstag']
   ].map(([date, name]) => ({ date, name })).sort((p, q) => p.date < q.date ? -1 : 1);
 }
+/** Jahr, das üblicherweise gerade geplant wird: bis Juni das laufende, ab Juli das folgende. */
+export function planningYear(now = new Date()) { return now.getFullYear() + (now.getMonth() >= 6 ? 1 : 0); }

@@ -137,7 +137,7 @@ function drawerEvent(e, pkNew) {
     ${cf && cf.soft.length ? html`<div class="note warn">${cf.soft.map(([r, c]) => r + ': ' + c + (c === 1 ? ' Tag' : ' Tage')).join(' · ')}</div>` : ''}
     <div class="form">
       <label class="f" style="grid-column:1/-1">Person${e ? html`<input type="text" value="${pName(p)}" disabled>` : html`<select id="evPk">${opts(cand.map(x => [x.alias, pName(x) + ' · ' + personMeta(x)]), p ? p.alias : '')}</select>`}</label>
-      <label class="f">Maßnahme<select id="evType">${opts([...Core.TYPES, 'Sonstiges'], v.type)}</select></label>
+      <label class="f">Maßnahme<select id="evType">${opts([...Core.typesOf(S), 'Sonstiges'], v.type)}</select></label>
       <label class="f">Bezeichnung (optional)<input type="text" id="evTitle" maxlength="80" value="${v.title || ''}" placeholder="z. B. Kursname"></label>
       <label class="f">Beginn<input type="date" id="evStart" value="${v.start}" min="${yr}-01-01" max="${yr}-12-31"></label>
       <label class="f">Ende<input type="date" id="evEnd" value="${v.end}" min="${yr}-01-01" max="${yr}-12-31"></label>

@@ -125,7 +125,7 @@ VIEWS.year = {
       <span><i class="sw" style="background:var(--school)"></i>Ferien</span>
     </div>
     <div class="palette noprint"><span class="small ink2"><b>Ziehen und Ablegen:</b> Element auf eine Person ziehen – oder einen Balken verschieben</span>
-      ${[Core.LOGBOOK, 'FitCheck', 'ICA', ...(S.settings.courseBlocks ? [] : Core.COURSE_TYPES)].map(t => html`<span class="pchip" data-drag="new" data-type="${t}" data-tip="${t}: auf eine Zeile ziehen. Dauer und Betreuung kommen aus dem Ausbildungsweg der Person; beim Ablegen wird die Kapazität geprüft."><i class="sw ${tcls(t)}"></i>${TSHORT[t] || t}</span>`)}
+      ${[Core.LOGBOOK, 'FitCheck', 'ICA', ...(S.measures || []).filter(m => !m.course || !S.settings.courseBlocks).map(m => m.name), ...(S.settings.courseBlocks ? [] : Core.COURSE_TYPES)].map(t => html`<span class="pchip" data-drag="new" data-type="${t}" data-tip="${t}: auf eine Zeile ziehen. Dauer und Betreuung kommen aus dem Ausbildungsweg der Person; beim Ablegen wird die Kapazität geprüft."><i class="sw ${tcls(t)}"></i>${TSHORT[t] || t}</span>`)}
       ${S.courses.filter(c => c.seats == null || Core.courseMembers(S, c.id).length < c.seats).slice(0, 14).map(c => html`<span class="pchip crs" data-drag="seat" data-id="${c.id}" data-tip="Lehrgangsplatz: auf eine Person ziehen, um sie in ${c.title} (${fmtS(c.start)} – ${fmt(c.end)}) einzutragen"><i class="sw ${tcls(c.type)}"></i>${c.title} <span class="muted">${fmtS(c.start)} · ${Core.courseMembers(S, c.id).length}${c.seats != null ? '/' + c.seats : ''}</span></span>`)}</div>
     <div class="gantt" id="gantt" data-keep="gantt"></div>
     <div class="noprint" style="margin-top:8px">${capLegend()}</div>

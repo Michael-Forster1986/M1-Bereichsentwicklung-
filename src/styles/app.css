@@ -244,6 +244,9 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--line-2);backgroun
 .t-Theorie{background:var(--t-theorie)} .t-Praxis{background:var(--t-praxis)} .t-PracticalLogbook{background:var(--t-logbook)}
 .t-FitCheck{background:var(--t-fitcheck);color:#0b0b0b} .t-Vorbereitung{background:var(--t-prep)} .t-ICA{background:var(--t-ica)}
 .t-BasicKnowledge{background:var(--t-bk)} .t-FG650{background:var(--t-fg)} .t-Sonstiges{background:var(--t-other)}
+/* Farbfelder für eigene Schritte (core/measures.js) */
+.t-x1{background:#0e8f9c} .t-x2{background:#a33fb5} .t-x3{background:#9a6a3c} .t-x4{background:#6f8a1c}
+.t-x5{background:#3d5a94} .t-x6{background:#d2478c} .t-x7{background:#2596c9} .t-x8{background:#5d6978}
 :root[data-theme=dark] .t-FitCheck{color:#fff}
 .a-Urlaub{background:var(--abs-u)} .a-Krank{background:var(--abs-k)} .a-Sonstiges{background:var(--abs-s)}
 .s-0{background:var(--s-frueh)} .s-1{background:var(--s-spaet)} .s-2{background:var(--s-nacht)}
@@ -510,3 +513,20 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 .h-faq>div{padding:9px 0 11px;color:var(--ink-2);line-height:1.55;max-width:80ch}
 @media (max-width:980px){.h-wrap{grid-template-columns:1fr}.h-toc{position:static;max-height:none;flex-direction:row;flex-wrap:wrap}}
 @media print{.h-wrap{display:block}.h-doc{max-width:none}.h-doc section{break-inside:avoid;border:0;padding:0 0 14px}.h-faq{border:0;padding:0}}
+
+/* ---------- Ausbildungswege: Schritte verschieben, Katalog der Schritte ---------- */
+.rt-step[data-step] .rt-sh{cursor:grab}
+.rt-step.moving{opacity:.45}
+.rt-step.drop-before{box-shadow:-4px 0 0 0 var(--accent)} .rt-step.drop-after{box-shadow:4px 0 0 0 var(--accent)}
+.rt-mv{display:inline-flex;gap:2px;flex:none}
+.rt-mv .btn{padding:1px 6px;min-width:0;font-size:12px;line-height:18px}
+.ms-tbl td.c,.ms-tbl th.c{text-align:center;width:64px}
+.ms-tbl input[type=checkbox]{width:17px;height:17px}
+.ms-colors{display:flex;gap:6px;flex-wrap:wrap}
+.ms-colors label{cursor:pointer;display:inline-flex}
+.ms-colors input{position:absolute;opacity:0;pointer-events:none}
+.ms-colors i{width:26px;height:26px;border-radius:7px;display:block;border:2px solid transparent;box-shadow:0 0 0 1px var(--line-2)}
+.ms-colors input:checked + i{border-color:var(--surface);box-shadow:0 0 0 2.5px var(--ink)}
+.ms-colors input:focus-visible + i{outline:2px solid var(--accent);outline-offset:3px}
+.ms-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink-2)}
+.ms-f label.c{color:var(--ink);font-size:13.5px}

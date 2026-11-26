@@ -67,7 +67,7 @@ test('installiertes Programm aktualisiert sich aus den veröffentlichten Version
   const after = await second.page.evaluate(() => window.m1desktop.update.check());
   t.diagnostic('nach der Aktualisierung: ' + after.phase + (after.error ? ' – ' + after.error : ''));
   assert.equal(after.phase, 'current');
-  assert.match(await second.page.textContent('#main h1'), /^Übersicht \d{4}$/);
+  assert.match(await second.page.textContent('#main h1'), /^Übersicht( \d{4})?$/);       // ab 5.3.0 startet das Programm leer
   await quit(second.app);
   fs.rmSync(TMP, { recursive: true, force: true });
 });

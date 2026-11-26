@@ -56,15 +56,31 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 |---|---|
 | Planung | Übersicht mit Jahresampel, Jahresplan (Gantt) mit Ziehen und Ablegen, Kapazität je Bereich und Dienst |
 | Lehrgänge | Lehrgänge als zusammenhängende Blöcke mit Plätzen und Teilnehmern: Bedarf je Art, Zeitleiste, Termine einspielen, beste Zeiträume und beste Besetzung berechnen |
-| Stammdaten | Personen & Cluster, Ausbildungswege (je Cluster oder individuell), Termine, Abwesenheiten, Ferien, Feiertage |
+| Stammdaten | Personen & Cluster, Termine, Abwesenheiten, Ferien, Feiertage |
+| Ausbildungswege | Je Cluster oder individuell; Reihenfolge der Schritte per Ziehen, eigene Schritte anlegen, je Maßnahme die zulässigen Dienste (Früh, Spät, Nacht) |
 | Planer | Vergleich vieler Reihenfolgen, Vorher/Nachher-Vergleich, fixierte Termine bleiben stehen, Kapazitäts- oder Szenariomodus |
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
-| Echtbetrieb | Karte „Bereit für die echte Planung?“, simulierte Daten entfernen (Personen, Qualifikationen und Cluster bleiben) |
+| Normalbetrieb | Das Programm startet leer; Personen, Urlaubsplan, Lehrgänge und Dienstplan werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Übungsmodus | Ein- und ausschaltbar: füllt das Fenster mit vollständig simulierten Daten zum Einarbeiten; Ausschalten leert das Programm wieder |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
 | Mehrere Jahre | Planungsjahre in einem Projekt, Folgejahr anlegen mit Übernahme, Vorleistungen aus Vorjahren, Jahresvergleich |
 | Datenschutz | Keine Übertragung von Daten, „Namen verbergen“, pseudonymisierter Export mit getrennter Schlüsseldatei |
 | Betrieb | Automatische Aktualisierung (abschaltbar), Fehlerprotokoll ohne Projektdaten, Dialog „Weiter warten / Neu laden“, wenn das Fenster nicht reagiert |
+
+### Normalbetrieb und Übungsmodus
+
+Nach dem Start ist das Programm leer. Daten werden einzeln eingespielt (Stammdaten, Urlaubsplan, Lehrgangstermine,
+Dienstplan) oder ein gespeichertes Projekt wird geöffnet. Zum Einarbeiten füllt der Übungsmodus das Fenster mit
+erfundenen Personen samt Dienstplan, Urlaub, Lehrgängen und berechnetem Jahresplan. Der Schalter steht unter
+„Daten & Datenschutz“ und bleibt gespeichert; wer ein eigenes Projekt öffnet oder anlegt, verlässt den Übungsmodus.
+
+### Ausbildungswege
+
+Die Schritte eines Wegs lassen sich per Ziehen der Kacheln (oder mit den Pfeilen) umordnen; der Planer hält die
+Reihenfolge ein. Neben den festen Maßnahmen kann ein Projekt eigene Schritte führen – einzeln im Dienst oder als
+Lehrgang. Für jede Maßnahme ist einstellbar, in welchen Diensten sie stattfinden darf (Vorgabe: Logbook in jedem
+Dienst, alles andere im Frühdienst). Planer, Ablegeprüfung im Jahresplan und Konfliktprüfung richten sich danach.
 
 ### Lehrgänge
 
@@ -103,7 +119,9 @@ als Simulation um 52 Wochen fortgeschrieben werden, bis der echte vorliegt.
 - Personendaten liegen nur in den Dateien, die Sie selbst speichern. Dazu gehören die Sicherungskopie
   `.bak` neben der Projektdatei und – nur wenn eingeschaltet – die Wiederherstellungskopie im
   Benutzerprofil. Beides lässt sich unter „Daten & Datenschutz“ abschalten.
-- Das Repository enthält keine Personendaten; Demo-Daten werden beim Start synthetisch erzeugt.
+- Projektdateien sind lesbares JSON und **nicht verschlüsselt**. Wer Zugriff auf den Ordner hat (auch über
+  Netzlaufwerk, Datensicherung oder Administration), kann sie lesen. Das Programm hat keine eigene Anmeldung.
+- Das Repository enthält keine Personendaten; die Daten des Übungsmodus werden synthetisch erzeugt.
 
 ## Aufbau
 
@@ -164,11 +182,12 @@ GitHub und an der Prüfsumme aus `latest.yml` – und damit am Schutz des GitHub
 - **Gleichheit mit der HTML-Fassung:** `tests/parity.test.js` lädt den Rechenkern aus
   `legacy/M1_Qualifikationscockpit_v4.html` und vergleicht Demo-Daten, Index, Planung in mehreren
   Reihenfolgen und Einstellungen, Konflikte, Lehrgangssuche, Importe und Pseudonymisierung. Der Vergleich läuft im
-  bisherigen Modus (Kurse tageweise); Lehrgänge als Blöcke, Urlaubsplan-Import und die Prüfung beim Ablegen haben
-  eigene Tests.
+  bisherigen Modus (Kurse tageweise, Vorgabe der Dienste, feste Reihenfolge); Lehrgänge als Blöcke, Urlaubsplan-Import,
+  die Prüfung beim Ablegen, eigene Schritte, Dienstregeln und freie Reihenfolge haben eigene Tests.
 - **Desktop-Programm:** `e2e/desktop.test.mjs` prüft Start, Abschottung, Speichern/Öffnen mit
   Sicherungskopie, Schließen mit ungespeicherten Änderungen, PDF/Excel/CSV/HTML-Ausgabe,
-  Wiederherstellung, den Jahreswechsel, den Urlaubsplan-Import aus Excel, Lehrgangsvorschläge, das Ziehen im Jahresplan,
+  Wiederherstellung, den Jahreswechsel, den leeren Start und den Übungsmodus, den Urlaubsplan-Import aus Excel,
+  Lehrgangsvorschläge, das Ziehen im Jahresplan, Reihenfolge, eigene Schritte und Dienste in den Ausbildungswegen,
   das Fehlerprotokoll und die Suche nach einer neuen Version (gegen einen lokalen Server; der Kanal weist fremde
   Adressen ab) – wahlweise gegen das gepackte Programm (`M1_APP=<Pfad>`). Nicht automatisch geprüft ist die
   Installation einer Aktualisierung unter Windows selbst.

@@ -21,7 +21,8 @@ describe('öffentliche Schnittstelle', () => {
     expect(Core.defaultConfig()).toEqual(Old.defaultConfig());
     expect(Core.defaultLimits()).toEqual(Old.defaultLimits());
     for (const y of [2026, 2027, 2028, 2032]) {
-      expect({ ...Core.defaultSettings(y), courseBlocks: undefined }).toEqual({ ...Old.defaultSettings(y), courseBlocks: undefined });
+      expect({ ...Core.defaultSettings(y), courseBlocks: undefined, shifts: undefined }).toEqual({ ...Old.defaultSettings(y), courseBlocks: undefined, shifts: undefined });
+      expect(Core.defaultSettings(y).shifts).toEqual({});
       expect(Core.holidaysBavaria(y)).toEqual(Old.holidaysBavaria(y));
       expect(normalizeState(Core.emptyState(y))).toEqual(normalizeState(Old.emptyState(y)));
     }
