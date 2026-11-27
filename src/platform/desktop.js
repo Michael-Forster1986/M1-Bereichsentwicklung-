@@ -4,6 +4,11 @@
  */
 export const desktop = (typeof window !== 'undefined' && window.m1desktop) || null;
 export const isDesktop = !!desktop;
+/**
+ * Versionsnummer des Programms. Im Desktop-Programm meldet sie das installierte Programm selbst, sonst steht sie seit dem
+ * Bau in der Datei. Leer nur beim Start ohne Build (Tests des Rechenkerns).
+ */
+export const APP_VERSION = String((desktop && desktop.info && desktop.info.version) || (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : ''));
 
 /** Fehleraufzeichnung im Desktop-Programm: merkt sich den Namen der zuletzt ausgelösten Aktion (keine Inhalte). */
 export const trace = name => { if (desktop && desktop.trace) desktop.trace(name); };
