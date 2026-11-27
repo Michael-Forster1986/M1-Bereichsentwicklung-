@@ -35,9 +35,9 @@ export function normCourse(c, types = COURSE_TYPES) {
   const modules = normModules(c.modules, c.type), span = modules ? moduleSpan(modules) : null;
   const start = span ? span.start : normDate(c.start), end = span ? span.end : normDate(c.end);
   if (!start || !end || end < start) return null;
-  const seats = Math.round(num(c.seats));
+  const seats = Math.round(num(c.seats)), ext = Math.round(num(c.ext));
   return { id: String(c.id || uid()).slice(0, 60), type: c.type, title: String(c.title || c.type).trim().slice(0, 80) || c.type, target: TARGETS.includes(c.target) ? c.target : '',
-    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}), ...(modules ? { modules } : {}) };
+    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}), ...(c.ref ? { ref: String(c.ref).slice(0, 40) } : {}), ...(ext > 0 ? { ext: clamp(ext, 1, 500) } : {}), ...(modules ? { modules } : {}) };
 }
 /**
  * Bringt Lehrgänge und ihre Teilnehmertermine in Einklang: Termine ohne Lehrgang verlieren den Bezug, und

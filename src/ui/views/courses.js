@@ -1,8 +1,9 @@
 import * as Core from '../../core/index.js';
 import { csvDownload, nextFrame, pickFile, templateDownload } from '../files.js';
-import { $, html, raw } from '../dom.js';
+import { $, esc, html, raw } from '../dom.js';
+import { isDesktop } from '../../platform/desktop.js';
 import { TSHORT, dayLabel, fmt, fmtS, nf, opts, pill, sgn, tcls, tname, typeOpts } from '../format.js';
-import { CONF, IX, P, S, UI, collator, commit, nameOf, pName, privacy, sortKey } from '../state.js';
+import { CONF, HARD, IX, P, S, UI, collator, commit, nameOf, pName, privacy, sortKey } from '../state.js';
 import { closeModal, confirmDlg, openModal, toast } from '../dialogs.js';
 import { ACT, CHG, TIP, VIEWS } from '../registry.js';
 import { go, render } from '../shell.js';
@@ -143,21 +144,23 @@ function demandCard(demand) {
 // ---------- Zeitleiste ----------------------------------------------------------------
 function timeline(sel) {
   const n = IX.n, T = state();
-  const lane = c => { const a = Math.max(0, IX.cal.idx(c.start)), b = Math.min(n - 1, IX.cal.idx(c.end)), m = Core.courseMembers(S, c.id), full = c.seats != null && m.length >= c.seats;
-    const bad = m.some(e => CONF.get(e.id)?.hard.length), count = m.length + (c.seats != null ? '/' + c.seats : '') + (full ? ' ✓' : ''), cls = tcls(c.type) + (c.id === sel ? ' on' : '') + (bad ? ' cf' : '');
+  const lane = c => { const a = Math.max(0, IX.cal.idx(c.start)), b = Math.min(n - 1, IX.cal.idx(c.end)), m = Core.courseMembers(S, c.id), ext = Core.extSeats(c), full = Core.freeSeats(c, m.length) === 0;
+    const bad = m.some(e => CONF.get(e.id)?.hard.length), count = m.length + (ext ? '+' + ext : '') + (c.seats != null ? '/' + c.seats : '') + (full ? ' ✓' : ''), cls = tcls(c.type) + (c.id === sel ? ' on' : '') + (bad ? ' cf' : '');
+    // Kurzer Lehrgang: die Zahl passt nicht in den Balken und steht daneben (am Jahresende links davon)
+    const out = (b - a + 1) * 2.5 < count.length * 7 + 10 ? ' out' + (b > n - 46 ? ' l' : '') : '';
     // Lehrgang mit Modulen: ein Abschnitt je Modul, das stattfindet; die Belegung steht dann an der Bezeichnung
     const segs = Core.hasModules(c) ? Core.moduleDays(IX, c).filter(x => x.days.length) : null;
     return html`<button class="lab crs-lab ${c.id === sel ? 'on' : ''}" data-act="crs-select" data-id="${c.id}" data-tip="${c.title}">${c.title}${segs ? html` <small>${count}</small>` : ''}</button>
       <div class="cells lane">${segs ? segs.map(x => { const p = x.days[0], q = x.days[x.days.length - 1], name = Core.moduleName(x.no); return html`<button class="cbar seg ${cls}" style="grid-row:1;grid-column:${p + 1} / span ${q - p + 1}" data-act="crs-select" data-id="${c.id}" data-no="${x.no}" data-tk="course"
           aria-label="${c.title}, ${name}, ${fmtS(IX.cal.iso[p])} – ${fmt(IX.cal.iso[q])}"><span>${name}</span></button>`; })
-        : html`<button class="cbar ${cls}" style="grid-column:${a + 1} / span ${Math.max(1, b - a + 1)}" data-act="crs-select" data-id="${c.id}" data-tk="course"
+        : html`<button class="cbar ${cls}${out}" style="grid-column:${a + 1} / span ${Math.max(1, b - a + 1)}" data-act="crs-select" data-id="${c.id}" data-tk="course"
         aria-label="${c.title}, ${span(c)}, ${m.length} Teilnehmer"><span>${count}</span></button>`}</div>`; };
   const ghost = (a, i) => { const x = IX.cal.idx(a.start), y = IX.cal.idx(a.end); return html`<span class="lab crs-lab muted">Vorschlag ${i + 1}</span><div class="cells lane"><button class="cbar ghost" style="grid-column:${x + 1} / span ${y - x + 1}" data-act="crs-prop-focus" data-i="${i}" data-tip="Vorschlag: ${fmtS(a.start)} – ${fmt(a.end)} · ${a.pks.length} Teilnehmer"><span>${a.pks.length}</span></button></div>`; };
   return html`<div class="card" style="margin-bottom:14px"><div class="row"><h3 style="font-size:14.5px;font-weight:650">2 · Lehrgänge im Jahr ${S.meta.year}</h3><span class="sp"></span>
-      <button class="btn sm" data-act="crs-import" data-tip="CSV oder Excel: Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze – optional je Zeile ein Teilnehmer. Mit Spalte „Modul“ auch die Module von Basic Knowledge.">Lehrgangstermine einspielen</button>
+      <button class="btn sm" data-act="crs-import" data-tip="Die Teilnehmerübersicht der Lehrgänge (Excel mit einem Blatt je Lehrgangsfamilie) – oder eine eigene Liste als CSV oder Excel: Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze, optional je Zeile ein Teilnehmer und die Spalte „Modul“.">Lehrgangstermine einspielen</button>
       <button class="btn sm" data-act="crs-tpl">Leere Vorlage</button><button class="btn sm" data-act="crs-export" ${S.courses.length ? '' : raw('disabled')}>CSV</button>
       <button class="btn sm primary" data-act="crs-new">Lehrgang anlegen</button></div>
-    <div class="sub" style="color:var(--ink-2);font-size:12.5px;margin:2px 0 10px">Jeder Balken ist ein Lehrgang; die Zahl zeigt belegte und vorhandene Plätze. Darüber die Kapazität je Dienst – so sehen Sie, in welche Zeit ein Lehrgang fällt. Balken anklicken zum Bearbeiten.</div>
+    <div class="sub" style="color:var(--ink-2);font-size:12.5px;margin:2px 0 10px">Jeder Balken ist ein Lehrgang; die Zahl zeigt belegte und vorhandene Plätze – „2+3/6“ heißt: 2 eigene Teilnehmer, 3 Plätze von anderen Bereichen belegt, 6 Plätze. Darüber die Kapazität je Dienst – so sehen Sie, in welche Zeit ein Lehrgang fällt. Balken anklicken zum Bearbeiten.</div>
     <div class="ampel crs-time" style="--n:${n};--lab:168px"><span></span><div class="months">${monthsRow()}</div>
       ${[0, 1, 2].map(k => html`<span class="lab">${Core.kShift(k)}</span><div class="cells" style="height:10px" data-tk="capcell" data-k="${k}">${capCells(k)}</div>`)}
       <span class="lab">Ferien</span><div class="cells band">${raw(Array.from(IX.school, v => v ? '<i class="on"></i>' : '<i></i>').join(''))}</div>
@@ -169,7 +172,7 @@ TIP.course = t => {
   const c = courseOf(t.dataset.id); if (!c) return null;
   const m = Core.courseMembers(S, c.id), days = Core.courseDayList(IX, c), mod = Core.hasModules(c) ? Core.moduleDays(IX, c).find(x => x.no === +t.dataset.no) : null;
   const inMod = mod ? m.filter(e => Core.memberModules(c, IX.people.get(e.pk)).includes(mod.no)).length : 0;
-  return html`<b>${c.title}</b> <span class="k">${tname(c.type)}${c.target ? ' · ' + c.target : ''}</span><br>${mod ? html`<b>${Core.moduleName(mod.no)}</b> ${fmt(mod.start)} – ${fmt(mod.end)} · ${mod.days.length} Tage · ${inMod} Teilnehmer<br><span class="k">Lehrgang insgesamt:</span> ` : ''}${fmt(c.start)} – ${fmt(c.end)} · ${days.length} Lehrgangstage${Core.hasModules(c) ? html` · ${c.modules.filter(x => !x.na).length} Module` : ''}<br>${m.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen belegt' : ' Teilnehmer'}${c.synthetic ? html`<br><span class="k">Szenario (simuliert)</span>` : ''}`;
+  return html`<b>${c.title}</b> <span class="k">${tname(c.type)}${c.target ? ' · ' + c.target : ''}</span><br>${mod ? html`<b>${Core.moduleName(mod.no)}</b> ${fmt(mod.start)} – ${fmt(mod.end)} · ${mod.days.length} Tage · ${inMod} Teilnehmer<br><span class="k">Lehrgang insgesamt:</span> ` : ''}${fmt(c.start)} – ${fmt(c.end)} · ${days.length} Lehrgangstage${Core.hasModules(c) ? html` · ${c.modules.filter(x => !x.na).length} Module` : ''}<br>${m.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen belegt' : ' Teilnehmer'}${Core.extSeats(c) ? html` · ${Core.extSeats(c)} ${Core.extSeats(c) === 1 ? 'weiterer Platz' : 'weitere Plätze'} von anderen Bereichen belegt` : ''}${c.note ? html`<br><span class="k">${c.note}</span>` : ''}${c.synthetic ? html`<br><span class="k">Szenario (simuliert)</span>` : ''}`;
 };
 
 // ---------- Vorschläge ------------------------------------------------------------------
@@ -192,7 +195,7 @@ function proposals() {
 function detail(c) {
   const yr = String(S.meta.year), members = Core.courseMembers(S, c.id).slice().sort((a, b) => collator.compare(nameOf(a.pk), nameOf(b.pk))), days = Core.courseDayList(IX, c);
   const cand = Core.courseCandidates(S, IX, c), a = cand.length ? Core.assessCourse(S, IX, c, cand) : null, okSet = new Set(a ? a.pks : []), why = new Map((a ? a.dropped : []).map(x => [x.pk, x.cats]));
-  const free = c.seats == null ? null : Math.max(0, c.seats - members.length), d0 = Math.max(0, IX.cal.idx(c.start)), d1 = Math.min(IX.n - 1, IX.cal.idx(c.end));
+  const free = Core.freeSeats(c, members.length), ext = Core.extSeats(c), d0 = Math.max(0, IX.cal.idx(c.start)), d1 = Math.min(IX.n - 1, IX.cal.idx(c.end));
   const mod = Core.hasModules(c), daySet = new Set(days);
   const strip = k => { let s = ''; for (let d = d0; d <= d1; d++) s += '<i class="' + (daySet.has(d) ? capClass(d, k) : 'c-off') + '"></i>'; return raw(s); };
   const used = [0, 1, 2].filter(k => members.some(e => (IX.evDays.get(e.id) || []).some(d => Core.assign(IX, IX.pi.get(e.pk), d) === k)));
@@ -205,7 +208,8 @@ function detail(c) {
       <label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select data-chg="crs" data-f="target">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], c.target)}</select></label>
       <label class="f" ${mod ? raw('data-tip="Ergibt sich aus den Modulen"') : ''}>Beginn<input type="date" value="${c.start}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="start" ${mod ? raw('disabled') : ''}></label>
       <label class="f" ${mod ? raw('data-tip="Ergibt sich aus den Modulen"') : ''}>Ende<input type="date" value="${c.end}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="end" ${mod ? raw('disabled') : ''}></label>
-      <label class="f">Plätze<input type="number" min="1" max="500" value="${c.seats ?? ''}" placeholder="offen" data-chg="crs" data-f="seats" style="width:100%"></label></div>
+      <label class="f">Plätze<input type="number" min="1" max="500" value="${c.seats ?? ''}" placeholder="offen" data-chg="crs" data-f="seats" style="width:100%"></label>
+      <label class="f" data-tip="Plätze, die Kolleginnen und Kollegen anderer Bereiche belegen. Sie stehen nicht im Projekt, zählen aber bei den freien Plätzen mit.">davon anderweitig belegt<input type="number" min="0" max="500" value="${ext || ''}" placeholder="0" data-chg="crs" data-f="ext" id="crsExt" style="width:100%"></label></div>
     ${Core.moduleCountOf(c.type) ? html`<div class="crs-mods" id="crsMods">
       <label class="c"><input type="checkbox" data-chg="crs-partial" ${mod ? raw('checked') : ''}> <span><b>Teilbeleger dabei</b> – einzelne Personen belegen nur bestimmte Module${mod ? '' : '. Ohne Teilbeleger belegen alle den ganzen Zeitraum; die Module müssen dann nicht einzeln festgelegt werden.'}</span></label>
       ${mod ? html`<div class="mod-chips">${c.modules.map(m => m.na ? html`<span class="mchip na" data-tip="${Core.moduleName(m.no)} findet nicht statt">${Core.moduleName(m.no)} · N/A</span>` : html`<span class="mchip"><b>${Core.moduleName(m.no)}</b> ${modSpan(m)}</span>`)}
@@ -213,7 +217,7 @@ function detail(c) {
     <div class="crs-strip"><div class="small ink2">${days.length} Lehrgangstage${mod ? ' in ' + c.modules.filter(m => !m.na).length + ' Modulen' : ''} · Kapazität der betroffenen Dienste nach Abzug des Lehrgangs</div>
       ${(used.length ? used : [0]).map(k => html`<div class="row" style="gap:10px;flex-wrap:nowrap"><span class="small ink2" style="width:44px;flex:none">${Core.kShift(k)}</span><div class="cells" style="--n:${d1 - d0 + 1}" data-tk="crsday" data-k="${k}" data-d0="${d0}">${strip(k)}</div></div>`)}</div>
     <div class="grid2" style="margin-top:14px;align-items:start">
-      <div><div class="row" style="margin-bottom:6px"><b>Teilnehmer</b><span class="muted">${members.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen' : ''}</span></div>
+      <div><div class="row" style="margin-bottom:6px"><b>Teilnehmer</b><span class="muted">${members.length}${c.seats != null ? ' von ' + c.seats + ' Plätzen' : ''}${ext ? ' · ' + ext + ' anderweitig belegt' : ''}</span></div>
         ${members.length ? html`<div class="tblwrap" style="max-height:330px"><table class="tbl"><tbody>${members.map(e => { const cf = CONF.get(e.id), p = IX.people.get(e.pk), hard = cf && cf.hard.length; return html`<tr class="${hard ? 'rowcrit' : ''}">
           <td><button class="btn ghost sm" data-act="person-open" data-pk="${p ? p.alias : ''}" style="padding:0;font-weight:600">${nameOf(e.pk)}</button><div class="muted xs">${p ? personMeta(p) : ''}</div></td>
           <td class="small">${hard ? html`<span style="color:var(--crit-ink)">${cf.hard.map(h => h[0] + (h[1] > 1 ? ' (' + h[1] + ' Tage)' : '')).join(', ')}</span>` : cf ? html`<span class="muted">${cf.soft.map(h => h[1] + ' freie Tage anzupassen').join(', ')}</span>` : html`<span class="muted">ohne Befund</span>`}${e.auto ? html` <span class="muted xs">· vom Planer zugeteilt</span>` : ''}${mod ? (Core.isPartial(c, p) ? html`<div class="xs"><b>Teilbeleger:</b> ${Core.moduleText(Core.memberModules(c, p))}</div>` : html`<div class="xs muted">alle Module</div>`) : ''}</td>
@@ -243,7 +247,7 @@ VIEWS.courses = {
   render() {
     const T = state(), demand = Core.courseDemand(S, IX), sel = courseOf(T.sel);
     if (T.sel && !sel) T.sel = '';
-    const seats = S.courses.reduce((s, c) => s + (c.seats || 0), 0), taken = S.events.filter(e => e.courseId).length, open = demand.reduce((s, g) => s + g.open.length, 0), need = demand.reduce((s, g) => s + g.all.length, 0);
+    const seats = S.courses.reduce((s, c) => s + Math.max(0, (c.seats || 0) - Core.extSeats(c)), 0), taken = S.events.filter(e => e.courseId).length, open = demand.reduce((s, g) => s + g.open.length, 0), need = demand.reduce((s, g) => s + g.all.length, 0);
     const bad = S.events.filter(e => e.courseId && CONF.get(e.id)?.hard.length).length;
     return html`
     <div class="view-head"><div><h1>Lehrgänge planen</h1><p>Lehrgänge (TEC, CAT A, CAT Praxis …) finden als zusammenhängender Block für eine Gruppe statt. Feste Termine spielen Sie ein; für alles Übrige berechnet das Programm die besten Zeiträume und die beste Besetzung – Tag für Tag gegen die Grenze der Produktion geprüft.</p></div></div>
@@ -275,6 +279,7 @@ CHG.crs = t => {
     const cur = courseOf(c.id);
     if (f === 'start' || f === 'end') Core.moveCourse(S, IX, cur, f === 'start' ? v : cur.start, f === 'end' ? v : cur.end);
     else if (f === 'seats') cur.seats = +v > 0 ? Core.clamp(Math.round(+v), 1, 500) : null;
+    else if (f === 'ext') { if (+v > 0) cur.ext = Core.clamp(Math.round(+v), 1, 500); else delete cur.ext; }
     else { if (f === 'type' && Core.hasModules(cur) && !Core.moduleCountOf(v)) Core.setCourseModules(S, IX, cur, null);      // Module gibt es nur bei dieser Art
       cur[f] = v; if (f === 'title' || f === 'type') for (const e of S.events) if (e.courseId === cur.id) { e.title = cur.title; e.type = cur.type; } }
   });
@@ -419,9 +424,83 @@ ACT['crs-export'] = () => {
   const rows = Core.courseListRows(S, IX, pk => privacy() ? IX.people.get(pk)?.alias : pk).map(r => [...r, r[6] ? names.get(r[6]) || '' : '']);
   csvDownload('Lehrgaenge', [...Core.TEMPLATES.courses, 'Name'], rows);
 };
+// ---------- Teilnehmerübersicht der Lehrgänge (Excel) ---------------------------------------------
+// Die Übersicht hat ein Blatt je Lehrgangsfamilie; unter jedem Lehrgang stehen die Teilnehmer. Übernommen werden die
+// gewählten Lehrgänge mit ihren Teilnehmern aus dem Projekt – wer nicht im Projekt steht, belegt nur einen Platz.
+let OV = null;
+const ovTypes = () => { const t = Core.courseTypesOf(S); return t.includes(Core.OTHER_COURSE) ? t : [...t, Core.OTHER_COURSE]; };
+const ovLabel = t => t === Core.OTHER_COURSE && !Core.measureOf(S, t) ? t : tname(t);
+/** Ein Zielmuster gibt es nur bei den festen Schritten der Ausbildungswege (Theorie, Praxis …). */
+const ovTargeted = t => t !== Core.OTHER_COURSE && !Core.measureOf(S, t);
+const ovPicked = () => OV.res.courses.filter(c => c.take);
+function ovSum() {
+  const p = ovPicked(), old = p.filter(c => c.exists).length;
+  return nf(p.length) + ' von ' + nf(OV.res.courses.length) + ' Lehrgängen gewählt' + (old ? ' (' + nf(old) + ' schon vorhanden – ' + (old === 1 ? 'wird' : 'werden') + ' aktualisiert)' : '')
+    + ' · ' + nf(p.reduce((s, c) => s + c.known.length, 0)) + ' Teilnahmen von Personen des Projekts';
+}
+function overviewDialog() {
+  const { res, file } = OV, st = res.stats, bad = res.errors.length > 0, types = ovTypes().map(t => [t, ovLabel(t)]), targets = [['', 'ohne'], ...Core.TARGETS], again = res.courses.some(c => c.exists);
+  openModal({ title: 'Lehrgangsübersicht prüfen', wide: true, body: html`
+    <div class="cmp" style="grid-template-columns:1fr 1.6fr"><div class="h">Datei</div><div class="h">${file}</div>
+      <div>Erkannt als</div><div class="n">Teilnehmerübersicht der Lehrgänge · ${nf(st.sheets)} ${st.sheets === 1 ? 'Blatt' : 'Blätter'} mit Lehrgängen</div>
+      <div>Lehrgänge im Planungsjahr ${S.meta.year}</div><div class="n">${nf(res.courses.length)}${st.otherYear ? html` <span class="muted xs">· ${nf(st.otherYear)} in anderen Jahren</span>` : ''}</div>
+      <div>Teilnehmerzeilen</div><div class="n">${nf(st.rows)} · davon <b>${nf(st.known)}</b> von ${nf(st.people)} Personen des Projekts</div></div>
+    ${bad ? html`<div class="note crit"><b>Nicht übernehmbar:</b>${res.errors.map(e => html`<div>${e}</div>`)}</div>` : html`
+    <p class="small ink2" style="margin:10px 0 8px">Gewählte Lehrgänge werden als feste Termine angelegt, ihre Teilnehmer aus dem Projekt eingetragen. Zugeordnet wird über die Personalnummer (auch in den Schreibweisen „U123456“ und „123456A“), sonst über den Namen. Wer nicht im Projekt steht, wird <b>nicht angelegt</b> – der Platz zählt als anderweitig belegt.</p>
+    <div class="row noprint" style="margin-bottom:6px;gap:6px"><button class="btn sm" data-act="m:own" data-tip="Lehrgänge mit Personen des Projekts und alle Lehrgänge der Ausbildungswege (TEC, CAT A)">Vorschlag</button><button class="btn sm" data-act="m:all">Alle</button><button class="btn sm" data-act="m:none">Keine</button>
+      <span class="small ink2" id="ovSum" style="margin-left:6px">${ovSum()}</span></div>
+    <div class="tblwrap" style="max-height:min(360px,40vh);flex-shrink:0"><table class="tbl" id="ovTbl"><thead><tr><th></th><th>Zeitraum</th><th>Lehrgang</th><th>Art</th><th>Zielmuster</th><th class="n">Plätze</th><th class="n" data-tip="Personen des Projekts · weitere Teilnehmer, die nicht im Projekt stehen">Teilnehmer</th></tr></thead><tbody>
+      ${res.courses.map((c, i) => html`<tr class="${c.take ? '' : 'off'}" data-i="${i}"><td><input type="checkbox" data-chg="m:take" data-i="${i}" aria-label="${c.project} übernehmen" ${c.take ? raw('checked') : ''}></td>
+        <td class="nowrap num">${span(c)}</td>
+        <td><b>${c.project}</b><div class="xs muted">Blatt „${c.sheet}“ · ${c.ref}${c.exists ? html` · <b>vorhanden</b>` : ''}</div></td>
+        <td><select data-chg="m:type" data-i="${i}" aria-label="Art">${opts(types, c.type)}</select></td>
+        <td><select data-chg="m:target" data-i="${i}" aria-label="Zielmuster" ${ovTargeted(c.type) ? '' : raw('disabled')}>${opts(targets, ovTargeted(c.type) ? c.target : '')}</select></td>
+        <td class="n">${c.quota ?? html`<span class="muted">offen</span>`}</td>
+        <td class="n nowrap" ${c.known.length ? raw('data-tip="' + esc(c.known.map(pk => nameOf(pk)).sort(collator.compare).join(' · ')) + '"') : ''}><b>${c.known.length}</b>${c.external ? html` <span class="muted">+ ${c.external}</span>` : ''}</td></tr>`)}</tbody></table></div>
+    ${again ? html`<label class="c" style="margin-top:10px"><input type="checkbox" data-chg="m:prune" id="ovPrune" ${OV.prune ? raw('checked') : ''}> <span>Wer in einem schon vorhandenen Lehrgang <b>nicht mehr in der Übersicht</b> steht, wird dort ausgetragen.</span></label>` : ''}
+    ${res.warnings.length ? html`<div class="note warn" style="margin-top:10px">${res.warnings.map(w => html`<div>${w}</div>`)}</div>` : ''}
+    <p class="small ink2" style="margin-top:8px">„${Core.OTHER_COURSE}“ bindet die Teilnehmer für den Zeitraum, gehört aber zu keinem Schritt der Ausbildungswege. Beim nächsten Einspielen werden Lehrgänge an ihrer Auftragsnummer wiedererkannt: Zeitraum, Plätze und Teilnehmer werden dann aktualisiert statt verdoppelt. Es wird nichts übertragen – die Datei bleibt ${isDesktop ? 'auf diesem Rechner' : 'in diesem Browserfenster'}.</p>`}`,
+    footer: html`<button class="btn" data-act="modal-close">Abbrechen</button><button class="btn primary" data-act="m:ok" ${bad ? raw('disabled') : ''}>Lehrgänge übernehmen</button>`,
+    handlers: {
+      take: el => { const c = res.courses[+el.dataset.i]; c.take = el.checked; el.closest('tr').classList.toggle('off', !c.take); const out = $('#ovSum'); if (out) out.textContent = ovSum(); },
+      type: el => { const c = res.courses[+el.dataset.i], tg = el.closest('tr').querySelector('[data-chg="m:target"]'); c.type = el.value; if (!ovTargeted(c.type)) { c.target = ''; tg.value = ''; } tg.disabled = !ovTargeted(c.type); },
+      target: el => { res.courses[+el.dataset.i].target = el.value; },
+      prune: el => { OV.prune = el.checked; },
+      own: () => { for (const c of res.courses) c.take = c.exists || c.known.length > 0 || c.route; overviewDialog(); },
+      all: () => { for (const c of res.courses) c.take = true; overviewDialog(); },
+      none: () => { for (const c of res.courses) c.take = false; overviewDialog(); },
+      ok: () => {
+        const list = ovPicked(), prune = OV.prune;
+        if (!list.length) return toast('Kein Lehrgang gewählt', 'crit');
+        closeModal();
+        let info = null;
+        const ok = commit('', () => { info = Core.applyCourseOverview(S, list, { prune }); });
+        OV = null;
+        if (!ok || !info) return;
+        state().sel = ''; go('courses');
+        const parts = [];
+        if (info.added) parts.push(nf(info.added) + (info.added === 1 ? ' Lehrgang' : ' Lehrgänge') + ' ergänzt');
+        if (info.updated) parts.push(nf(info.updated) + (info.updated === 1 ? ' vorhandener Lehrgang' : ' vorhandene Lehrgänge') + ' aktualisiert');
+        parts.push(nf(info.participants) + ' Teilnehmer eingetragen');
+        if (info.left) parts.push(nf(info.left) + ' ausgetragen');
+        if (info.kept) parts.push(nf(info.kept) + ' Lehrgänge mit Modulen behalten ihren Zeitraum');
+        if (HARD) parts.push(nf(HARD) + ' Termine mit Konflikt');
+        toast(parts.join(' · '), '', HARD ? { label: 'Zum Bericht', run: () => go('report') } : null);
+      } } });
+}
+/** Ist die Excel-Datei die Teilnehmerübersicht? Dann öffnet sich deren Prüfung. */
+async function tryOverview(file) {
+  if (!/\.xlsx$/i.test(file.name)) return false;
+  const sheets = await Core.readXlsx(file);
+  if (!Core.isCourseOverview(sheets)) return false;
+  OV = { file: file.name, res: Core.parseCourseOverview(S, sheets), prune: true };
+  overviewDialog();
+  return true;
+}
 ACT['crs-import'] = async () => {
-  if (!S.people.length) return toast('Zuerst Stammdaten laden', 'crit');
   const file = await pickFile('.csv,.txt,.xlsx'); if (!file) return;
+  if (await tryOverview(file)) return;
+  if (!S.people.length) return toast('Zuerst Stammdaten laden', 'crit');
   const { rows, note } = await readRows(file, r => r.some(c => ['start', 'end'].includes(Core.HEAD[Core.normHead(c)]))), { head, rows: objs } = Core.rowsToObjects(rows), chk = Core.checkCourses(S, objs, head);
   importPreview({ title: 'Lehrgangstermine prüfen', file: file.name, chk, facts: [['Format', note], ['Lehrgänge in der Datei', nf(chk.courses.length)], ['Teilnehmer in der Datei', nf(chk.participants)],
     ['Arten', [...new Set(chk.courses.map(c => c.type))].join(', ') || '–'], ...(chk.courses.some(c => c.modules) ? [['Lehrgänge mit Modulen', nf(chk.courses.filter(c => c.modules).length)]] : [])],

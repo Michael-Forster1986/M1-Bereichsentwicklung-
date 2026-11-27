@@ -62,6 +62,7 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
 | Normalbetrieb | Das Programm startet leer; Personen, Dienstplan, Urlaubsplan und Lehrgänge werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Lehrgangsübersicht | Die Teilnehmerübersicht der Lehrgänge als Excel-Mappe einspielen (ein Blatt je Lehrgangsfamilie, Lehrgangszeile mit Beginn und Ende, darunter die Teilnehmer); Art und Zielmuster werden vorgeschlagen, Teilnehmer über Personalnummer oder Namen zugeordnet, Plätze anderer Bereiche mitgezählt; erneutes Einspielen aktualisiert |
 | Schichtplan | Die monatliche Excel-Tabelle des Schichtplans einspielen (Tage „01 Fr“, Symbole wie F1, S1, N2, Up); Symbole einer Bedeutung zuordnen; Monatsansicht „Dienstplan“ mit den Original-Symbolen; fehlende Personen anlegen |
 | Dienstplan | Als Excel einspielen oder je Person in der Seitenleiste eintragen: Dienst per Auswahl, Tage anklicken oder ziehen, Zeitraum und Wochenfolge füllen, auf andere Personen übertragen. Tage ohne Eintrag gelten in neuen Projekten als frei. |
 | Übungsmodus | Ein- und ausschaltbar: füllt das Fenster mit vollständig simulierten Daten zum Einarbeiten; Ausschalten leert das Programm wieder |
@@ -108,6 +109,18 @@ Dateinamen oder in einem Filtertext der Tabelle; `parseDayMatrix` liest beides (
 Planung bedeutet, legt der Mensch fest (`settings.symbols`, Vorschlag: `defaultSymbolMap`); daraus entstehen Dienste und
 Abwesenheiten (`applyShiftPlan`, `deriveFromSymbols`). Die Symbole selbst bleiben je Person und Tag gespeichert
 (`symbols`, ein Zeichen je Tag) und werden in der Ansicht „Dienstplan“ und im Personenkalender so angezeigt.
+
+### Teilnehmerübersicht der Lehrgänge
+
+Die Lehrgänge kommen als Excel-Mappe mit einem Blatt je Lehrgangsfamilie. Jedes Blatt hat die Spalten `No.`, `Project`,
+`Product Duration`, `Quoten MUC`, `Scheduled Begin`, `Scheduled End`, `Provider`, `Location`; eine Zeile mit Beginn und
+Ende ist ein Lehrgang, die nummerierten Zeilen darunter sind die Teilnehmer (Name, daneben die Personalnummer).
+`parseCourseOverview` (`src/core/courseplan.js`) findet die Spalten an ihren Überschriften, schlägt Art und Zielmuster
+vor (`guessCourseKind`) und ordnet Teilnehmer über Nummer, Ziffernkern (`idCore`: „U123456“ = „123456A“) oder Namen zu.
+`applyCourseOverview` legt die gewählten Lehrgänge an. Jeder trägt die Auftragsnummer als Kennung (`course.ref`), an der
+er beim nächsten Einspielen wiedererkannt wird, und die Zahl der Plätze, die Personen außerhalb des Projekts belegen
+(`course.ext`, `freeSeats`). Lehrgänge ohne Bezug zu den Ausbildungswegen laufen unter der Art „Sonstiger Lehrgang“,
+die beim ersten Einspielen als eigener Schritt angelegt wird.
 
 ### Lehrgänge
 
