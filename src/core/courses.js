@@ -5,7 +5,7 @@ import { validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { FRAME_TYPE, rulesOf } from './rules.js';
 import { assign, buildIndex, capInfo, eventK } from './indexing.js';
-import { hasModules, memberModules, moduleSpan, normModules, normPersonModules } from './modules.js';
+import { hasModules, isPartial, memberModules, moduleCountOf, moduleName, moduleSpan, moduleText, normModules, normPersonModules } from './modules.js';
 
 // ---------- Lehrgangsplanung (zusammenhängende Kurse) -------------------
 /**
@@ -93,6 +93,7 @@ export function courseAssess(st, ix, o) {
   }
   issues.push(...ev.viol);
   res.pks = group;
+  if (o.daysOf) res.personDays = Object.fromEntries(group.map(pk => [pk, daysOf(pk)]));     // Teilbeleger: jede Person an ihren Tagen
   res.minMargin = Number.isFinite(ev.mm) ? ev.mm : null; res.zeroMargin = Number.isFinite(ev.zm) ? ev.zm : null;
   const okShift = o.shiftType ? shiftsOf(st, o.shiftType) : [true, false, false];        // ohne Angabe der Art gilt die Vorgabe: Frühdienst
   for (const pk of group) {
@@ -103,6 +104,27 @@ export function courseAssess(st, ix, o) {
   res.ok = issues.length === 0;
   return res;
 }
+/**
+ * Modulplan für die Suche: steps = [{ no, days }] in der Reihenfolge der Module (nur die, die stattfinden), count = Zahl
+ * der Module der Art. Liefert null, wenn kein Modul Tage hat.
+ */
+export function modulePlan(type, daysByNo) {
+  const count = moduleCountOf(type), steps = [];
+  for (let no = 1; no <= count; no++) { const n = Math.round(num(daysByNo[no])); if (n > 0) steps.push({ no, days: Math.min(n, 120) }); }
+  return count && steps.length ? { count, steps, len: steps.reduce((s, m) => s + m.days, 0) } : null;
+}
+/** Legt die Module eines Plans ab einem Starttag nacheinander auf Arbeitstage. Liefert { mods, days, end } oder null, wenn das Jahr nicht reicht. */
+function layoutModules(ix, start, plan) {
+  const mods = [], days = [];
+  let d = start;
+  for (const step of plan.steps) {
+    const mine = [];
+    for (; d < ix.n && mine.length < step.days; d++) if (ix.work[d]) mine.push(d);
+    if (mine.length < step.days) return null;
+    mods.push({ no: step.no, days: mine }); days.push(...mine);
+  }
+  return { mods, days, end: days[days.length - 1] };
+}
 /** Prüft jeden möglichen Starttag im Suchzeitraum. */
 export function courseSearch(st, ix, o) {
   const cal = ix.cal, all = [];
@@ -110,6 +132,16 @@ export function courseSearch(st, ix, o) {
   const a = Math.max(0, cal.idx(o.from)), b = Math.min(ix.n - 1, cal.idx(o.to));
   for (let d = a; d <= b; d++) {
     if (!ix.work[d]) continue;
+    if (o.plan) {
+      // Modulplan: die Module liegen ab dem Starttag nacheinander; jede Person wird nur an den Tagen ihrer Module geprüft
+      const lay = layoutModules(ix, d, o.plan);
+      if (!lay || lay.end > b) break;
+      const a = courseAssess(st, ix, { ...o, start: cal.iso[d], end: cal.iso[lay.end], days: lay.days,
+        daysOf: pk => { const need = ix.people.get(pk)?.modules, set = need && need.length ? new Set(need) : null; return lay.mods.filter(m => !set || set.has(m.no)).flatMap(m => m.days); } });
+      a.modules = Array.from({ length: o.plan.count }, (_, i) => { const m = lay.mods.find(x => x.no === i + 1); return m ? { no: m.no, start: cal.iso[m.days[0]], end: cal.iso[m.days[m.days.length - 1]] } : { no: i + 1, na: true }; });
+      all.push(a);
+      continue;
+    }
     let e = d, cnt = 0;
     for (; e < ix.n && cnt < o.len; e++) if (ix.work[e]) cnt++;
     e--;
@@ -133,9 +165,11 @@ export function pickSlots(list, { sort = 'early', nonOverlap = true, max = 15, t
   return sort === 'early' ? out : out;
 }
 export function courseEvents(ix, a, { name = 'TEC Lehrgang', type = 'Theorie', kind = 'TEC' } = {}) {
-  const dates = a.days.map(d => ix.cal.iso[d]);
-  return a.pks.map(pk => ({ id: uid(), pk, type, title: name, courseKind: kind, auto: false, start: dates[0], end: dates[dates.length - 1],
-    dates: dates.slice(), trainee: 1, mentor: 0, tec: 0, examiner: 0, target: ix.people.get(pk)?.target || '' }));
+  return a.pks.map(pk => {
+    const dates = ((a.personDays && a.personDays[pk]) || a.days).map(d => ix.cal.iso[d]);         // Teilbeleger: nur die Tage ihrer Module
+    return { id: uid(), pk, type, title: name, courseKind: kind, auto: false, start: dates[0], end: dates[dates.length - 1],
+      dates, trainee: 1, mentor: 0, tec: 0, examiner: 0, target: ix.people.get(pk)?.target || '' };
+  });
 }
 
 // ---------- Lehrgänge als eigene Einheit: Termin, Plätze, Teilnehmer --------------
@@ -314,6 +348,21 @@ export function setPersonModules(st, ix, pk, list) {
   for (const c of st.courses || []) if (hasModules(c) && st.events.some(e => e.courseId === c.id && e.pk === pk)) removed += syncCourse(st, ix, c, pk).removed;
   return { removed };
 }
+/**
+ * Zeilen der Lehrgangsliste in den Spalten der Vorlage (Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze; Person; Modul) –
+ * so, dass sich die Liste wieder einspielen lässt. Lehrgang mit Modulen: eine Zeile je Modul („N/A“ = findet nicht statt),
+ * dazu je Teilnehmer eine Zeile; bei Teilbelegern stehen dort die belegten Module. idOf(pk) liefert Nummer oder Pseudonym.
+ */
+export function courseListRows(st, ix, idOf = pk => pk) {
+  const rows = [];
+  for (const c of st.courses || []) {
+    const m = courseMembers(st, c.id), base = [c.title, c.type, c.target || '', c.start, c.end, c.seats ?? ''], mod = hasModules(c);
+    if (mod) for (const x of c.modules) rows.push([c.title, c.type, c.target || '', x.na ? 'N/A' : x.start, x.na ? '' : x.end, c.seats ?? '', '', moduleName(x.no)]);
+    else if (!m.length) rows.push([...base, '', '']);
+    for (const e of m) { const p = ix.people.get(e.pk); rows.push([...base, idOf(e.pk), mod && isPartial(c, p) ? moduleText(memberModules(c, p)) : '']); }
+  }
+  return rows;
+}
 export function removeCourse(st, id) {
   const n = st.events.filter(e => e.courseId === id).length;
   st.events = st.events.filter(e => e.courseId !== id); st.courses = st.courses.filter(c => c.id !== id);
@@ -323,7 +372,8 @@ export function removeCourse(st, id) {
  * Beste Zeiträume für neue Lehrgänge: sucht den Starttag mit der größten möglichen Gruppe (bei Gleichstand die größte
  * Reserve, dann der früheste), merkt ihn vor und plant die übrigen Personen weiter, bis alle untergebracht sind
  * oder kein Zeitraum mehr die Mindestgröße erreicht.
- * o: { type, target, title, pks, len, from, to, minGroup, maxGroup, threshold, avoidSchool, freePolicy, maxCourses, nonOverlap }
+ * o: { type, target, title, pks, len, from, to, minGroup, maxGroup, threshold, avoidSchool, freePolicy, maxCourses, nonOverlap, plan }
+ * o.plan (modulePlan): Lehrgang mit Modulen – jeder Vorschlag trägt dann seine Module, Teilbeleger zählen nur an ihren Tagen.
  * Liefert { courses: [Bewertung je Vorschlag], left: [nicht untergebrachte Personen] }.
  */
 export function proposeCourses(st, ix0, o) {
@@ -333,7 +383,7 @@ export function proposeCourses(st, ix0, o) {
   while (pool.length >= minGroup && out.length < (o.maxCourses || 12)) {
     const window = new Map(pool.map(pk => [pk, courseWindow(work, ix, ix.people.get(pk), o.type)]));
     const res = courseSearch(work, ix, { threshold: o.threshold || 'zero', avoidSchool: !!o.avoidSchool, freePolicy: o.freePolicy || 'adjust', ignoreReplaceable: o.ignoreReplaceable !== false,
-      group: 'max', minGroup, maxGroup: o.maxGroup || 0, pks: pool, from: o.from, to: o.to, len: o.len, window });
+      group: 'max', minGroup, maxGroup: o.maxGroup || 0, pks: pool, from: o.from, to: o.to, len: o.len, window, ...(o.plan ? { plan: o.plan } : {}) });
     const free = res.all.filter(a => a.ok && a.pks.length >= minGroup && !busy.some(([s, e]) => !(a.end < s || a.start > e)));
     const best = pickSlots(free, { sort: 'group', nonOverlap: false, max: 1, threshold: o.threshold || 'zero' })[0];
     if (!best) break;

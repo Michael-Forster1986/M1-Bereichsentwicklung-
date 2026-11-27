@@ -178,7 +178,7 @@ test('Ausgaben: CSV, Programm mit Stand (HTML) und PDF', async () => {
   await nextSave(csv); await menu('act', 'events-export');
   await waitFor(() => fs.existsSync(csv), 'CSV');
   const text = fs.readFileSync(csv, 'utf8');
-  assert.ok(text.startsWith('﻿pk;Name;type'), 'CSV mit BOM und Kopfzeile');
+  assert.ok(text.startsWith('\uFEFFpk;Name;type'), 'CSV mit BOM und Kopfzeile');
   assert.ok(text.split('\r\n').length > 100);
   await nextSave(htmlFile); await menu('act', 'save-snapshot');
   await waitFor(() => fs.existsSync(htmlFile), 'HTML');
@@ -606,6 +606,78 @@ test('Lehrgänge: Basic Knowledge mit Modulen, N/A und Teilbelegern – bis in d
   assert.equal(await page.isDisabled('#crsDetail input[data-f="end"]'), false);
   assert.equal(await page.locator('.crs-time .cbar.seg').count(), 0);
   await page.click('#crsDetail [data-act="crs-delete"]'); await page.click('#modal [data-act="m:ok"]');
+});
+
+test('Lehrgänge: Module über die Lehrgangsliste einspielen und ausgeben; beste Zeiträume mit Modulplan', async () => {
+  await menu('go', 'courses'); await page.waitForSelector('[data-act="crs-import"]');
+  const before = await page.locator('.crs-time .cbar.seg').count();
+  // Liste mit Modulen: eine Zeile je Modul, N/A als Beginn; ein Teilnehmer nur mit M2
+  const snap = async name => { const f = path.join(TMP, name); await nextSave(f); await menu('act', 'save-project-as'); await waitFor(() => fs.existsSync(f), name); const prj = JSON.parse(fs.readFileSync(f, 'utf8')); return prj.years[prj.active]; };
+  const st0 = await snap('Vor-Modulliste.m1cockpit'), who = st0.people.filter(p => p.cluster === '1' && !p.locked).slice(0, 2).map(p => p.pk);
+  assert.equal(who.length, 2);
+  const csv = path.join(TMP, 'Lehrgangsliste.csv');
+  fs.writeFileSync(csv, '\uFEFFLehrgang;Art;Zielmuster;Beginn;Ende;Plätze;Personalnummer;Modul\r\n'
+    + 'BK Liste;Basic Knowledge;;08.03.2027;12.03.2027;10;;M1\r\n'
+    + 'BK Liste;Basic Knowledge;;15.03.2027;17.03.2027;;;M2\r\n'
+    + 'BK Liste;Basic Knowledge;;N/A;;;;M3\r\n'
+    + 'BK Liste;Basic Knowledge;;;;;' + who[0] + ';\r\n'
+    + 'BK Liste;Basic Knowledge;;;;;' + who[1] + ';M2\r\n');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act="crs-import"]')]);
+  await chooser.setFiles(csv);
+  await page.waitForSelector('#modal [data-act="m:ok"]');
+  const preview = await page.locator('#modal').innerText();
+  assert.match(preview, /Prüfung bestanden/);
+  assert.match(preview, /Lehrgänge mit Modulen\s*1/);
+  assert.match(preview, /M4–M17 stehen nicht in der Liste/);
+  assert.match(preview, /M1–M2[\s\S]*1 Teilbeleger/);
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => (await page.locator('.crs-time .cbar.seg').count()) === before + 2, 'zwei Modulabschnitte in der Zeitleiste');
+  const st1 = await snap('Nach-Modulliste.m1cockpit'), c = st1.courses.find(x => x.title === 'BK Liste');
+  assert.deepEqual([c.start, c.end, c.seats, c.modules.length], ['2027-03-08', '2027-03-17', 10, 17]);
+  assert.deepEqual(c.modules.filter(m => !m.na), [{ no: 1, start: '2027-03-08', end: '2027-03-12' }, { no: 2, start: '2027-03-15', end: '2027-03-17' }]);
+  const dates = p => st1.events.find(e => e.courseId === c.id && e.pk === p).dates;
+  assert.equal(dates(who[0]).length, 8);
+  assert.deepEqual(dates(who[1]), ['2027-03-15', '2027-03-16', '2027-03-17']);
+  // Ausgabe: je Modul eine Zeile, beim Teilbeleger die Module – und die Liste lässt sich wieder einspielen
+  const out = path.join(TMP, 'Lehrgaenge-aus.csv');
+  await nextSave(out); await page.click('[data-act="crs-export"]');
+  await waitFor(() => fs.existsSync(out), 'ausgegebene Lehrgangsliste');
+  const lines = fs.readFileSync(out, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/).filter(l => l.startsWith('BK Liste;'));
+  assert.equal(lines.filter(l => l.split(';')[6] === '' && /^M\d+$/.test(l.split(';')[7])).length, 17, 'eine Zeile je Modul');
+  assert.equal(lines.filter(l => l.split(';')[3] === 'N/A').length, 15);
+  assert.equal(lines.find(l => l.split(';')[6] === who[1]).split(';')[7], 'M2');
+  const [again] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act="crs-import"]')]);
+  await again.setFiles(out);
+  await page.waitForSelector('#modal [data-act="m:ok"]');
+  assert.match(await page.locator('#modal').innerText(), /Prüfung bestanden/);
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /vorhandene aktualisiert/.test(await toastText()), 'erneutes Einspielen aktualisiert');
+  const st2 = await snap('Nach-Wiedereinspielen.m1cockpit');
+  assert.equal(st2.courses.filter(x => x.title === 'BK Liste').length, 1, 'nichts verdoppelt');
+  assert.equal(st2.events.filter(e => e.courseId === c.id).length, 2);
+
+  // Beste Zeiträume mit Modulplan: M1 drei Tage, M2 zwei Tage – der Vorschlag wird ein Lehrgang mit Modulen
+  await page.click('.dm:has-text("Basic Knowledge") [data-act="crs-propose"]'); await page.waitForSelector('#modal #cpLen');
+  assert.equal(await page.isVisible('#cpModBox'), false);
+  await page.check('#cpPartial');
+  assert.equal(await page.locator('#cpDays input').count(), 17);
+  assert.equal(await page.isDisabled('#cpLen'), true);
+  await page.click('#modal #cpGo');
+  await waitFor(async () => /mindestens ein Modul eine Dauer/.test(await toastText()), 'ohne Dauer kein Modulplan');
+  await page.fill('#cpDays input[data-no="1"]', '3'); await page.locator('#cpDays input[data-no="1"]').dispatchEvent('change');
+  await page.fill('#cpDays input[data-no="2"]', '2'); await page.locator('#cpDays input[data-no="2"]').dispatchEvent('change');
+  assert.equal(await page.inputValue('#cpLen'), '5');
+  assert.match(await page.locator('#cpSum').innerText(), /2 Module \(M1–M2\) · zusammen 5 Lehrgangstage · 15 N\/A/);
+  await page.fill('#cpMin', '1'); await page.selectOption('#cpThr', 'min');
+  await page.click('#modal #cpGo');
+  await page.waitForSelector('#crsProp [data-act="crs-prop-take"]', { timeout: 60000 });
+  assert.match(await page.locator('#crsProp').innerText(), /5 Lehrgangstage in 2 Modulen \(M1–M2\)/);
+  assert.match(await page.locator('#crsProp tbody tr >> nth=0').innerText(), /M1 [\s\S]*M2 /);
+  const segs = await page.locator('.crs-time .cbar.seg').count();
+  await page.click('#crsProp [data-act="crs-prop-take"] >> nth=0');
+  await waitFor(async () => (await page.locator('.crs-time .cbar.seg').count()) === segs + 2, 'übernommener Vorschlag hat zwei Module');
+  await waitFor(async () => (await page.locator('#crsDetail .mchip:not(.na)').count()) === 2, 'Module im geöffneten Lehrgang');
+  assert.equal(await page.locator('#crsDetail .mchip.na').count(), 15);
 });
 
 test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge und Ziehen', async () => {

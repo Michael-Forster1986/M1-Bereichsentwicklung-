@@ -111,6 +111,9 @@ Lehrgänge der Art Basic Knowledge können in Modulen geführt werden (M1 bis M1
 Modul einen Zeitraum oder die Kennzeichnung N/A (findet nicht statt), und je Person ist festgelegt, welche Module sie
 braucht. Ihr Termin liegt dann nur an diesen Tagen; Planer, Kapazitätsprüfung und Jahresplan rechnen modulgenau
 (`course.modules`, `person.modules`, `src/core/modules.js`). Ohne Teilbeleger genügen Beginn und Ende.
+Die Lehrgangsliste (CSV/Excel) kennt dafür die Spalte „Modul“ – eine Zeile je Modul, bei Teilnehmern die belegten
+Module – und wird in demselben Aufbau ausgegeben. „Beste Zeiträume berechnen“ nimmt einen Modulplan (Arbeitstage je
+Modul) und prüft Teilbeleger nur an ihren Tagen.
 
 ### Ziehen und Ablegen
 
