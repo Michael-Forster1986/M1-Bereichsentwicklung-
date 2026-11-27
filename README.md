@@ -62,6 +62,7 @@ Umgebungen gibt die IT die Datei frei oder signiert sie mit dem Firmenzertifikat
 | Dateien | Projektdatei `.m1cockpit` mit Speichern / Speichern unter, zuletzt geöffnet, Sicherungskopie `.bak` vor dem Überschreiben, Nachfrage bei ungespeicherten Änderungen, optionale Wiederherstellungskopie |
 | Importe | Urlaubsplan als Excel-Tabelle je Tag mit Kürzel-Zuordnung, Lehrgangstermine, Stammdaten (CSV, Excel), Dienstplan, feste Termine, Tageskapazität, Ferien – jeweils mit Prüfung und Vorschau; Dateien der bisherigen HTML-Fassung und der Vorgängerversion 3.x |
 | Normalbetrieb | Das Programm startet leer; Personen, Dienstplan, Urlaubsplan und Lehrgänge werden einzeln eingespielt. Karte „Bereit für die echte Planung?“ |
+| Schichtplan | Die monatliche Excel-Tabelle des Schichtplans einspielen (Tage „01 Fr“, Symbole wie F1, S1, N2, Up); Symbole einer Bedeutung zuordnen; Monatsansicht „Dienstplan“ mit den Original-Symbolen; fehlende Personen anlegen |
 | Dienstplan | Als Excel einspielen oder je Person in der Seitenleiste eintragen: Dienst per Auswahl, Tage anklicken oder ziehen, Zeitraum und Wochenfolge füllen, auf andere Personen übertragen. Tage ohne Eintrag gelten in neuen Projekten als frei. |
 | Übungsmodus | Ein- und ausschaltbar: füllt das Fenster mit vollständig simulierten Daten zum Einarbeiten; Ausschalten leert das Programm wieder |
 | Berichte | Gesamtbericht als PDF, jede Ansicht als PDF, Excel-Arbeitsmappe mit allen Tabellen, CSV je Liste |
@@ -98,6 +99,15 @@ und Dateien; geändert wird nur die Anzeige (`measureEdits`).
 Die Regeln der Vorgängerversion sind einstellbar (`settings.rules`, gespeichert wird nur die Abweichung): für welche
 Cluster der Praxis-Lehrgang Voraussetzung ist, der Weg für die Zielstufe TEC, das Zurückstellen von A320, „Kombikurs
 nur für Zielstufe TEC“ und der automatische Vorbereitungstag vor der ICA. Ohne Änderung rechnet der Planer wie bisher.
+
+### Schichtplan und Schichtsymbole
+
+Der Schichtplan kommt monatsweise als Excel-Tabelle: Zeile 1 mit den Tagen („01 Fr“), darunter die Beschriftung (Team,
+Nachname, Vorname, U-Nummer, MF), je Person eine Zeile mit einem Symbol je Tag. Monat und Jahr stehen nur im
+Dateinamen oder in einem Filtertext der Tabelle; `parseDayMatrix` liest beides (`periodHint`). Was ein Symbol für die
+Planung bedeutet, legt der Mensch fest (`settings.symbols`, Vorschlag: `defaultSymbolMap`); daraus entstehen Dienste und
+Abwesenheiten (`applyShiftPlan`, `deriveFromSymbols`). Die Symbole selbst bleiben je Person und Tag gespeichert
+(`symbols`, ein Zeichen je Tag) und werden in der Ansicht „Dienstplan“ und im Personenkalender so angezeigt.
 
 ### Lehrgänge
 

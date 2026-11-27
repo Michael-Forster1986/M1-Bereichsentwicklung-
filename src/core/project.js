@@ -1,3 +1,5 @@
+import { normSymbols } from './symbols.js';
+import { normSymbolMap } from './shiftplan.js';
 import { moduleSpan, normModules } from './modules.js';
 import { normRules } from './rules.js';
 import { ABS_TYPES, AREAS, COURSE_TYPES, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS } from './constants.js';
@@ -100,6 +102,8 @@ export function sanitize(x) {
   S.courseBlocks = xs.courseBlocks !== false;
   S.shifts = normShifts(xs.shifts, [...types, 'Sonstiges']);
   { const r = normRules(xs.rules, types); if (Object.keys(r).length) S.rules = r; }
+  { const m = normSymbolMap(xs.symbols); if (Object.keys(m).length) S.symbols = m; }
+  st.symbols = normSymbols(x.symbols, n, seen);
   if (Array.isArray(xs.sick) && xs.sick.length === 12 && xs.sick.every(v => fin(v) && v >= 0 && v <= 50)) S.sick = xs.sick.slice();
   st.report = (Array.isArray(x.report) ? x.report : []).filter(r => r && seen.has(String(r.pk))).map(r => ({ pk: String(r.pk), status: String(r.status || 'open'), reason: String(r.reason || '').slice(0, 400), ...(Array.isArray(r.remaining) ? { remaining: r.remaining.map(String) } : {}) }));
   st.planInfo = x.planInfo && typeof x.planInfo === 'object' ? { at: String(x.planInfo.at || ''), mode: String(x.planInfo.mode || ''), variant: String(x.planInfo.variant || ''), tried: num(x.planInfo.tried) } : null;

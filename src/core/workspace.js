@@ -1,3 +1,4 @@
+import { shiftSymbols } from './symbols.js';
 import { FORMAT, GATE_TYPES } from './constants.js';
 import { clone } from './util.js';
 import { addDays, firstMonday, holidaysBavaria, makeCalendar } from './dates.js';
@@ -116,6 +117,8 @@ export function rolloverYear(prev, opt = {}) {
       for (let d = 0; d < cal.n; d++) { let j = ix.cal.idx(addDays(cal.iso[d], -364)); while (j >= ix.n) j -= 364; arr[d] = j >= 0 ? src[j] : 0; }
       next.roster[p.pk] = encodeRoster(arr); info.roster++;
     }
+    // die Symbole des Schichtplans ziehen im Gleichschritt mit
+    shiftSymbols(prev, next, ix.n, cal.n, prev.people.map(p => p.pk), d => { let j = ix.cal.idx(addDays(cal.iso[d], -364)); while (j >= ix.n) j -= 364; return j; });
     if (info.roster) { next.meta.simulated.roster = true; next.meta.assumptions.push('Dienstplan aus ' + from + ' um 52 Wochen fortgeschrieben (simuliert) – durch den echten Dienstplan ersetzen'); }
   }
   return { state: next, info };

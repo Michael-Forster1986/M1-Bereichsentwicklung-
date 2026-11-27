@@ -17,7 +17,9 @@ export { courseAssess, courseSearch, modulePlan, courseListRows, pickSlots, cour
 export { TEMPLATES, HEAD, normHead, parseCSV, rowsToObjects, toCSV } from './csv.js';
 export { checkPeople, applyPeople, checkRoster, applyRoster, checkAbsences, applyAbsences, checkCapacity, checkEvents, courseTypeOf, checkCourses, applyCourses } from './imports.js';
 export { sanitize, migrateLegacy, loadAny, readPayload, normCourse, linkCourses } from './project.js';
-export { parseDayMatrix, defaultCodeMap, matrixAbsences, applyDayMatrix, nameKey, MATRIX_TARGETS } from './daymatrix.js';
+export { parseDayMatrix, defaultCodeMap, matrixAbsences, applyDayMatrix, nameKey, MATRIX_TARGETS, MONTH_NAMES, periodHint } from './daymatrix.js';
+export { SYMBOL_TARGETS, isDutyTarget, normSymbolMap, defaultSymbolMap, openSymbols, shiftPlanSummary, applyShiftPlan, deriveFromSymbols, setSymbolMap } from './shiftplan.js';
+export { MAX_SYMBOLS, emptySymbols, normSymbols, symbolsOf, symbolCounts, setSymbols, clearSymbolDays, clearSymbols } from './symbols.js';
 export { elementFor, checkPlacement } from './placement.js';
 export { simulatedParts, removeSimulated, readiness } from './golive.js';
 export { PROJECT_VERSION, wrapProject, projectYears, isProjectPayload, sanitizeProject, sanitizeAny, loadProject, serializeProject, carriedCredit, rolloverYear, refreshCredits, pseudonymizeProject, reidentifyProject } from './workspace.js';

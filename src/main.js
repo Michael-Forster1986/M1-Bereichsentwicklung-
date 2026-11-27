@@ -23,6 +23,7 @@ import './ui/views/people.js';
 import './ui/views/routes.js';
 import './ui/views/events.js';
 import './ui/views/absences.js';
+import './ui/views/roster.js';
 import './ui/views/report.js';
 import './ui/views/years.js';
 import './ui/views/data.js';

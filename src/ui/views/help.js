@@ -79,7 +79,10 @@ VIEWS.help = {
         <h3>Dienstplan eintragen</h3>
         <p>In einem neuen Projekt gilt jeder Tag als <b>frei</b>, bis ein Dienst eingetragen ist. Ohne Dienste kann der Planer nichts verteilen. Es gibt zwei Wege:</p>
         <div class="tblwrap"><table class="tbl"><thead><tr><th>Weg</th><th>So geht es</th></tr></thead><tbody>
-          <tr><td><b>Als Excel einspielen</b></td><td>Unter ${go('data', 'Daten & Datenschutz')} die Karte „Dienstplan“: Liste oder Tabelle mit einer Zeile je Person und einer Spalte je Tag (F, S, N, Frei). Gilt für alle Personen der Datei.</td></tr>
+          <tr><td><b>Schichtplan einspielen</b></td><td>Unter ${go('roster', 'Dienstplan')} die Schaltfläche „Schichtplan einspielen“: die monatliche Excel-Tabelle des Schichtplans – eine Zeile je Person, eine Spalte je Tag, Symbole wie F1, S1, N2, Up. Monat und Jahr erkennt das Programm aus dem Dateinamen oder aus der Tabelle. Personen, die es im Projekt noch nicht gibt, legt es auf Wunsch an.</td></tr>
+          <tr><td><b>Symbole zuordnen</b></td><td>Beim ersten Einspielen legen Sie für jedes Symbol fest, was es für die Planung bedeutet: Dienst (Früh, Spät, Nacht), dienstfrei, Urlaub, Krank, sonstige Abwesenheit – oder „ohne Bedeutung“. Die Zuordnung wird gemerkt und beim nächsten Monat vorgeschlagen. Ändern lässt sie sich jederzeit unter „Bedeutung festlegen“; das gilt sofort für alle Tage mit diesem Symbol.</td></tr>
+          <tr><td><b>Symbole ansehen</b></td><td>Die Ansicht ${go('roster', 'Dienstplan')} zeigt den Monat wie die Excel-Tabelle, mit den Original-Symbolen; die Farbe steht für die Bedeutung. Dieselben Symbole stehen im Kalender der Person. Wer einen Tag von Hand ändert, ersetzt dort das Symbol.</td></tr>
+          <tr><td><b>Als Liste einspielen</b></td><td>Unter ${go('data', 'Daten & Datenschutz')} die Karte „Dienstplan“: Liste oder Tabelle mit einer Zeile je Person und einer Spalte je Tag (F, S, N, Frei). Gilt für alle Personen der Datei.</td></tr>
           <tr><td><b>Je Person von Hand</b></td><td>Person anklicken – die Seitenleiste öffnet sich. <b>„Dienstplan bearbeiten“</b> zeigt sie groß und blendet die Werkzeuge ein.</td></tr></tbody></table></div>
         <div class="tblwrap" style="margin-top:8px"><table class="tbl"><thead><tr><th>Werkzeug in der Seitenleiste</th><th>Wirkung</th></tr></thead><tbody>
           <tr><td><b>Eintragen</b></td><td>Dienst (Früh, Spät, Nacht, Frei) und Bereich wählen, dann einen Tag anklicken. Von einem Tag zum anderen ziehen trägt den Zeitraum dazwischen ein – an den gewählten Wochentagen.</td></tr>
@@ -216,6 +219,7 @@ VIEWS.help = {
           <tr><td><b>Lehrgangstermine</b></td><td>${Core.TEMPLATES.courses.join('; ')}</td><td class="muted">pk nur, wenn Teilnehmer mitkommen sollen</td></tr>
           <tr><td><b>Stammdaten</b></td><td>${Core.TEMPLATES.people.join('; ')}</td><td class="muted">nur pk ist Pflicht; deutsche Spaltennamen werden erkannt</td></tr>
           <tr><td><b>Dienstplan</b></td><td>pk; date; area; shift</td><td class="muted">oder als Tabelle je Tag</td></tr>
+          <tr><td><b>Schichtplan (Monat)</b></td><td>Team; Nachname; Vorname; U-Nummer; MF; je Tag ein Symbol</td><td class="muted">Excel des Schichtplans, einzuspielen unter „Dienstplan“</td></tr>
           <tr><td><b>Abwesenheiten (Liste)</b></td><td>pk; start; end; type</td><td class="muted">Urlaub, Krank, Sonstiges</td></tr>
           <tr><td><b>Feste Termine</b></td><td>${Core.TEMPLATES.events.join('; ')}</td><td class="muted">einzelne gebuchte Maßnahmen</td></tr>
           <tr><td><b>Tageskapazität</b></td><td>${Core.TEMPLATES.capacity.join('; ')}</td><td class="muted">nur wenn eigene Tageswerte gelten sollen</td></tr></tbody></table></div>

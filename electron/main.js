@@ -167,7 +167,7 @@ function onClose(e) {
 }
 
 // ---------- Menü ---------------------------------------------------------------
-const VIEW_ITEMS = [['overview', 'Übersicht'], ['year', 'Jahresplan'], ['capacity', 'Kapazität'], ['courses', 'Lehrgänge'], ['people', 'Personen && Cluster'],
+const VIEW_ITEMS = [['overview', 'Übersicht'], ['year', 'Jahresplan'], ['capacity', 'Kapazität'], ['courses', 'Lehrgänge'], ['people', 'Personen && Cluster'], ['roster', 'Dienstplan'],
   ['routes', 'Ausbildungswege'], ['events', 'Termine'], ['absences', 'Abwesenheiten && Kalender'], ['report', 'Bericht'], ['data', 'Daten && Datenschutz'], ['help', 'Anleitung']];
 const send = (cmd, arg) => () => { if (win && rendererReady) win.webContents.send('m1:command', cmd, arg); };
 async function deliverFile(file) {

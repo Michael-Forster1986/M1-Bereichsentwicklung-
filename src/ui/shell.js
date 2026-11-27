@@ -13,7 +13,7 @@ export let rendering = false;
 export const deferred = [];
 const NAV = [
   ['Planung', [['overview', 'Übersicht'], ['year', 'Jahresplan'], ['capacity', 'Kapazität'], ['courses', 'Lehrgänge']]],
-  ['Stammdaten', [['people', 'Personen & Cluster'], ['routes', 'Ausbildungswege'], ['events', 'Termine'], ['absences', 'Abwesenheiten & Kalender']]],
+  ['Stammdaten', [['people', 'Personen & Cluster'], ['roster', 'Dienstplan'], ['routes', 'Ausbildungswege'], ['events', 'Termine'], ['absences', 'Abwesenheiten & Kalender']]],
   ['Projekt', [['report', 'Bericht'], ['data', 'Daten & Datenschutz'], ['help', 'Anleitung']]]
 ];
 

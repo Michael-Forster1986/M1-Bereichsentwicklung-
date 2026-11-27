@@ -583,6 +583,35 @@ body.dragging,body.dragging *{cursor:grabbing!important;user-select:none!importa
 .drawer.wide{width:min(1180px,calc(100vw - 24px))}
 .pcal i b{display:none;font-style:normal;font-weight:650;line-height:1;pointer-events:none}
 .pcal .dh.minor{visibility:hidden}
+.pcal i b.sy{font-size:.82em;letter-spacing:-.03em}
+/* ---------- Dienstplan: Monatsraster mit den Symbolen des Schichtplans ---------- */
+.rs-wrap{max-height:calc(100vh - 290px);min-height:240px;overflow:auto;border-radius:10px}
+.rs-tbl{border-collapse:separate;border-spacing:0;font-size:12px;font-variant-numeric:tabular-nums;min-width:100%}
+.rs-tbl th,.rs-tbl td{border-right:1px solid var(--surface);border-bottom:1px solid var(--surface);text-align:center;white-space:nowrap}
+.rs-tbl thead th{position:sticky;top:0;z-index:2;background:var(--surface-2);color:var(--ink-2);font-weight:500;padding:4px 2px;min-width:34px;line-height:1.15}
+.rs-tbl thead th b{display:block;color:var(--ink);font-weight:650}
+.rs-tbl thead th span{font-size:10.5px}
+.rs-tbl thead th.we{background:var(--surface-3)} .rs-tbl thead th.ho b{color:var(--crit-ink)}
+.rs-tbl .rs-name{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;min-width:190px;max-width:260px;padding:0;border-right:1px solid var(--line-2)}
+.rs-tbl thead .rs-name{z-index:3;background:var(--surface-2);padding:4px 10px}
+.rs-tbl .rs-name button{all:unset;display:block;box-sizing:border-box;width:100%;padding:3px 10px;cursor:pointer;overflow:hidden;text-overflow:ellipsis}
+.rs-tbl .rs-name button:hover b{text-decoration:underline}
+.rs-tbl .rs-name button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.rs-tbl .rs-name b{font-weight:600;font-size:12.5px} .rs-tbl .rs-name small{display:block;color:var(--muted);font-size:10.5px;overflow:hidden;text-overflow:ellipsis}
+.rs-tbl td{height:30px;padding:0 3px;font-weight:600;color:var(--ink);background:var(--surface-2)}
+.rs-tbl td.none{background:var(--surface-2)} .rs-tbl td.none.we{background:var(--surface-3)}
+.k-f{background:var(--s-frueh)!important;color:#0b2545!important} .k-s{background:var(--s-spaet)!important;color:#fff!important} .k-n{background:var(--s-nacht)!important;color:#fff!important}
+.k-free{background:var(--surface-3)!important;color:var(--ink-2)!important;font-weight:500!important}
+.k-away{background:color-mix(in srgb,var(--warn) 34%,var(--surface))!important;color:var(--ink)!important}
+.k-open{background:var(--surface)!important;color:var(--ink)!important;box-shadow:inset 0 0 0 1.5px var(--warn)}
+.rs-tbl td.hand{opacity:.5;font-weight:500}
+.rs-tbl td.ab{background-image:repeating-linear-gradient(135deg,transparent 0 3px,rgba(255,255,255,.35) 3px 5px)!important}
+.rs-legend{display:flex;flex-wrap:wrap;gap:6px 14px}
+.rs-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
+.rs-chip i,.rs-sym{font-style:normal;font-weight:650;font-size:12px;display:inline-block;min-width:34px;text-align:center;padding:3px 5px;border-radius:5px}
+.rs-chip small{color:var(--muted)}
+.tbl tr.rowwarn td{background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
+.seg button.has{box-shadow:inset 0 -3px 0 var(--good)}
 .pcal i.fb{opacity:.45}
 .drawer.wide .pcal{grid-template-columns:40px repeat(31,minmax(0,1fr));gap:3px;font-size:11.5px}
 .drawer.wide .pcal .dh.minor{visibility:visible}
