@@ -6,7 +6,8 @@ import { assignAliases, normPerson, parseCluster, normShift } from './people.js'
 import { decodeRoster, encodeRoster, rosterCode } from './roster.js';
 import { TEMPLATES, normHead, rowsToObjects } from './csv.js';
 import { buildIndex } from './indexing.js';
-import { courseKey, joinCourse } from './courses.js';
+import { courseKey, joinCourse, setCourseModules, setPersonModules } from './courses.js';
+import { MODULE_TYPE, hasModules, moduleCountOf, moduleName, moduleSpan, moduleText, parseModuleList } from './modules.js';
 
 // ---------- Importprüfungen --------------------------------------------
 /** Liefert {rows, errors, warnings}. Fehler blockieren die Übernahme. */
@@ -197,48 +198,113 @@ export function courseTypeOf(text, st = null) {
   if (s.includes('fg650')) return 'FG650';
   return 'Theorie';
 }
+/** Zelle, die sagt: dieses Modul findet nicht statt. */
+const NA_CELL = /^(n\s*\/?\s*a\.?|entfällt|entfaellt|findet nicht statt|nein|-|–|—|x)$/i;
 /**
  * Lehrgangstermine: je Zeile ein Termin (Lehrgang; Art; Zielmuster; Beginn; Ende; Plätze).
  * Mit Spalte pk steht je Zeile ein Teilnehmer; gleiche Art, Bezeichnung und Zeitraum bilden einen Lehrgang.
+ * Mit Spalte „Modul“ (nur Basic Knowledge): eine Zeile je Modul ohne Person legt den Zeitraum dieses Moduls fest –
+ * „N/A“ als Beginn heißt: findet nicht statt. Bei einer Teilnehmerzeile nennt die Spalte die Module, die die Person belegt.
  */
 export function checkCourses(st, objs, head) {
-  const errors = [], warnings = [], y = String(st.meta.year), known = new Set(st.people.map(p => p.pk)), byName = new Map(st.people.map(p => [p.name, p.pk])), map = new Map();
+  const errors = [], warnings = [], y = String(st.meta.year), known = new Set(st.people.map(p => p.pk)), byName = new Map(st.people.map(p => [p.name, p.pk])), byAlias = new Map(st.people.filter(p => p.alias).map(p => [p.alias, p.pk])), map = new Map(), mods = new Map();
   for (const f of ['start', 'end']) if (!head.includes(f)) errors.push('Spalte „' + f + '“ (Beginn / Ende) fehlt');
   if (!head.includes('title') && !head.includes('type')) errors.push('Spalte „Lehrgang“ oder „Art“ fehlt');
   if (errors.length) return { errors, warnings, courses: [], participants: 0 };
+  const hasMod = head.includes('module'), cell = (r, f) => String(r[f] ?? '').trim();
+  const titleOf = r => (cell(r, 'title') || cell(r, 'type')).slice(0, 80);
+  const targetOf = (r, title) => { const want = cell(r, 'target').toLowerCase(); return TARGETS.find(t => t.toLowerCase() === want) || TARGETS.find(t => !t.includes(' ') && title.toUpperCase().includes(t)) || ''; };
+  const seatsOf = r => { const n = Math.round(num(cell(r, 'seats').replace(',', '.'))); return n > 0 ? clamp(n, 1, 500) : null; };
+  // 1. Durchgang – Modulzeilen: Modul genannt, keine Person. Art und Bezeichnung bilden den Lehrgang.
+  if (hasMod) objs.forEach((r, i) => {
+    if (errors.length > 25 || !cell(r, 'module') || cell(r, 'pk')) return;
+    const line = 'Zeile ' + (i + 2) + ': ', title = titleOf(r);
+    if (!title) return errors.push(line + 'Bezeichnung oder Art fehlt');
+    const type = courseTypeOf(cell(r, 'type') || title, st), n = moduleCountOf(type);
+    if (!n) return errors.push(line + 'Module gibt es nur bei ' + labelOf(st, MODULE_TYPE) + ' – diese Zeile hat die Art ' + labelOf(st, type));
+    const nos = parseModuleList(cell(r, 'module'), n);
+    if (!nos || nos.length !== 1) return errors.push(line + 'Modul nicht erkannt (' + cell(r, 'module') + ') – je Zeile ein Modul, z. B. M3');
+    const no = nos[0], key = type + '|' + title;
+    let c = mods.get(key);
+    if (!c) mods.set(key, c = { type, title, target: targetOf(r, title), start: '', end: '', seats: null, fixed: true, pks: [], picks: {}, list: new Map() });
+    const seats = seatsOf(r); if (seats) c.seats = seats;
+    if (c.list.has(no)) return errors.push(line + moduleName(no) + ' steht doppelt in der Liste');
+    const sRaw = cell(r, 'start'), eRaw = cell(r, 'end');
+    if (NA_CELL.test(sRaw) || (!sRaw && !eRaw)) return void c.list.set(no, { no, na: true });
+    const s = normDate(sRaw), e = normDate(eRaw || sRaw);
+    if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + moduleName(no) + ': Zeitraum ungültig oder außerhalb ' + y);
+    c.list.set(no, { no, start: s, end: e });
+  });
+  for (const c of mods.values()) {
+    const missing = [];
+    c.modules = Array.from({ length: moduleCountOf(c.type) }, (_, i) => c.list.get(i + 1) || (missing.push(i + 1), { no: i + 1, na: true }));
+    delete c.list;
+    if (!c.modules.some(m => !m.na)) { errors.push(c.title + ': kein Modul mit Zeitraum'); continue; }
+    Object.assign(c, moduleSpan(c.modules));
+    if (missing.length) warnings.push(c.title + ': ' + moduleText(missing) + ' stehen nicht in der Liste – sie gelten als N/A (finden nicht statt)');
+  }
+  // Teilnehmerzeilen dürfen sich allein über Art und Bezeichnung auf einen vorhandenen Lehrgang mit Modulen beziehen
+  const existing = new Map((st.courses || []).filter(hasModules).map(c => [c.type + '|' + c.title, c]));
+  // 2. Durchgang – Termine ohne Module und alle Teilnehmer
   objs.forEach((r, i) => {
     if (errors.length > 25) return;
-    const line = 'Zeile ' + (i + 2) + ': ', rawType = String(r.type ?? '').trim(), title = (String(r.title ?? '').trim() || rawType).slice(0, 80);
-    if (!title && !String(r.start ?? '').trim() && !String(r.end ?? '').trim()) return;
-    const s = normDate(r.start), e = normDate(r.end);
-    if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
+    const modText = hasMod ? cell(r, 'module') : '';
+    let pk = cell(r, 'pk');
+    if (modText && !pk) return;                                       // Modulzeile, schon gelesen
+    const line = 'Zeile ' + (i + 2) + ': ', rawType = cell(r, 'type'), title = titleOf(r);
+    if (!title && !cell(r, 'start') && !cell(r, 'end')) return;
     if (!title) return errors.push(line + 'Bezeichnung oder Art fehlt');
-    const type = courseTypeOf(rawType || title, st), want = String(r.target ?? '').trim().toLowerCase();
-    const target = TARGETS.find(t => t.toLowerCase() === want) || TARGETS.find(t => !t.includes(' ') && title.toUpperCase().includes(t)) || '';
-    const key = type + '|' + title + '|' + s + '|' + e;
-    let c = map.get(key);
-    if (!c) map.set(key, c = { type, title, target, start: s, end: e, seats: null, fixed: true, pks: [] });
-    const seats = Math.round(num(String(r.seats ?? '').replace(',', '.')));
-    if (seats > 0) c.seats = clamp(seats, 1, 500);
-    let pk = String(r.pk ?? '').trim();
+    const type = courseTypeOf(rawType || title, st), ex = existing.get(type + '|' + title);
+    let c = mods.get(type + '|' + title);
+    if (!c && ex && pk) { c = map.get('into|' + ex.id); if (!c) map.set('into|' + ex.id, c = { type, title, target: ex.target || '', start: ex.start, end: ex.end, seats: null, fixed: true, pks: [], picks: {}, into: ex.id }); }
+    if (!c) {
+      const s = normDate(r.start), e = normDate(r.end);
+      if (!s || !e || e < s || !s.startsWith(y) || !e.startsWith(y)) return errors.push(line + 'Zeitraum ungültig oder außerhalb ' + y);
+      const key = type + '|' + title + '|' + s + '|' + e;
+      c = map.get(key);
+      if (!c) map.set(key, c = { type, title, target: targetOf(r, title), start: s, end: e, seats: null, fixed: true, pks: [], picks: {} });
+    }
+    const seats = seatsOf(r); if (seats && !c.into) c.seats = seats;
     if (pk) {
-      if (!known.has(pk) && byName.has(pk)) pk = byName.get(pk);
+      if (!known.has(pk)) pk = byName.get(pk) || byAlias.get(pk) || pk;          // auch Name oder Pseudonym (ausgegebene Liste im Pseudonym-Modus)
       if (!known.has(pk)) return warnings.push(line + 'unbekannte Person – der Termin wird übernommen, dieser Teilnehmer nicht');
       if (!c.pks.includes(pk)) c.pks.push(pk);
+      if (modText && (c.modules || c.into)) {
+        const nos = parseModuleList(modText, moduleCountOf(type));
+        if (!nos) warnings.push(line + 'Module nicht erkannt (' + modText + ') – die Person belegt alle Module');
+        else if (nos.length) c.picks[pk] = nos;
+      }
     }
   });
-  const courses = [...map.values()].sort((a, b) => a.start < b.start ? -1 : 1);
+  const courses = [...mods.values(), ...map.values()].filter(c => c.start).sort((a, b) => a.start < b.start ? -1 : 1);
   for (const c of courses) if (c.seats != null && c.pks.length > c.seats) warnings.push(c.title + ' (' + fmtDE(c.start) + '): ' + c.pks.length + ' Teilnehmer bei ' + c.seats + ' Plätzen');
   if (!courses.length && !errors.length) errors.push('Keine Lehrgangstermine gefunden');
   return { errors, warnings, courses, participants: courses.reduce((n, c) => n + c.pks.length, 0) };
 }
-/** Übernimmt Lehrgangstermine; vorhandene (gleiche Art, Bezeichnung, Zeitraum) werden ergänzt statt verdoppelt. */
+/**
+ * Übernimmt Lehrgangstermine; vorhandene (gleiche Art, Bezeichnung, Zeitraum – bei Modulen: gleiche Art und Bezeichnung)
+ * werden ergänzt statt verdoppelt. Module und die Auswahl der Teilbeleger werden mit übernommen.
+ */
 export function applyCourses(st, chk) {
   const info = { added: 0, updated: 0, participants: 0, removed: 0 }, byKey = new Map(st.courses.map(c => [courseKey(c), c]));
   for (const c of chk.courses) {
-    let cur = byKey.get(courseKey(c));
-    if (cur) { if (c.seats != null) cur.seats = c.seats; if (c.target) cur.target = c.target; info.updated++; }
-    else { cur = { id: uid(), type: c.type, title: c.title, target: c.target, start: c.start, end: c.end, seats: c.seats, fixed: true }; st.courses.push(cur); byKey.set(courseKey(cur), cur); info.added++; }
+    let cur = c.into ? st.courses.find(x => x.id === c.into) : (c.modules && st.courses.find(x => hasModules(x) && x.type === c.type && x.title === c.title)) || byKey.get(courseKey(c));
+    if (c.into && !cur) continue;
+    if (cur) {
+      if (c.seats != null) cur.seats = c.seats;
+      if (c.target) cur.target = c.target;
+      if (c.modules) setCourseModules(st, buildIndex(st), cur, c.modules);
+      if (!c.into) info.updated++;
+    } else {
+      cur = { id: uid(), type: c.type, title: c.title, target: c.target, start: c.start, end: c.end, seats: c.seats, fixed: true, ...(c.modules ? { modules: c.modules.map(m => ({ ...m })) } : {}) };
+      st.courses.push(cur); byKey.set(courseKey(cur), cur); info.added++;
+    }
+    // Teilbeleger: was die Person hier belegt, steht als Bedarf bei ihr; was sie an Modulen braucht, die hier nicht stattfinden, bleibt
+    if (hasModules(cur)) for (const [pk, nos] of Object.entries(c.picks || {})) {
+      const p = st.people.find(x => x.pk === pk); if (!p) continue;
+      const off = new Set(cur.modules.filter(m => m.na).map(m => m.no)), before = p.modules || cur.modules.map(m => m.no);
+      setPersonModules(st, buildIndex(st), pk, [...nos, ...before.filter(no => off.has(no))]);
+    }
     if (c.pks.length) { const r = joinCourse(st, buildIndex(st), cur, c.pks); info.participants += r.added; info.removed += r.removed; }
   }
   st.courses.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : a.title < b.title ? -1 : 1);

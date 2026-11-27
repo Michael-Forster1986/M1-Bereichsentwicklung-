@@ -42,6 +42,7 @@ alias('date', 'date', 'Datum', 'Tag');
 alias('type', 'type', 'Art', 'Maßnahme', 'Typ', 'Lehrgangsart');
 alias('title', 'title', 'Titel', 'Lehrgang', 'Bezeichnung', 'Kurs', 'Kursname', 'Lehrgangsname');
 alias('seats', 'seats', 'Plätze', 'Platzzahl', 'Teilnehmerzahl', 'max. Teilnehmer', 'Kapazität Lehrgang');
+alias('module', 'module', 'Modul', 'Module', 'Belegte Module');
 alias('net', 'net', 'NettoVorFortbildung', 'Netto');
 alias('min', 'min', 'Minimum');
 alias('zero', 'zero', '0Punkt', '0-Punkt', 'Nullpunkt');
@@ -74,5 +75,5 @@ export const TEMPLATES = {
   capacity: ['date', 'area', 'shift', 'net', 'min', 'zero', 'checked', 'absencesIncluded', 'gross', 'absent'],
   school: ['name', 'start', 'end'], events: ['pk', 'type', 'title', 'start', 'end', 'trainee', 'mentor', 'tec', 'examiner'],
   key: ['alias', 'pk', 'name', 'org'],
-  courses: ['title', 'type', 'target', 'start', 'end', 'seats', 'pk']
+  courses: ['title', 'type', 'target', 'start', 'end', 'seats', 'pk', 'module']
 };

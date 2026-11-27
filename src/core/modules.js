@@ -56,6 +56,23 @@ export function moduleIssues(rows, type, year) {
   if (!out.length && !any) out.push('Mindestens ein Modul muss stattfinden');
   return out;
 }
+/**
+ * Liest Modulangaben aus einer Liste: „M3“, „2, 5“, „M1–M4“, „Modul 7“. Liefert die sortierten Nummern,
+ * [] für „alle“ oder eine leere Angabe und null, wenn sich die Angabe nicht lesen lässt.
+ */
+export function parseModuleList(text, count = MODULE_COUNT) {
+  const s = String(text ?? '').trim().toLowerCase();
+  if (!s || s === 'alle' || s === 'all') return [];
+  const out = new Set();
+  for (const part of s.replace(/module?/g, ' ').replace(/m/g, ' ').replace(/\s*[-–—]\s*/g, '-').split(/[\s,;]+/).filter(Boolean)) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) return null;
+    const a = +m[1], b = m[2] ? +m[2] : a;
+    if (a < 1 || b > count || b < a) return null;
+    for (let no = a; no <= b; no++) out.add(no);
+  }
+  return [...out].sort((a, b) => a - b);
+}
 /** Module, die eine Person braucht, bereinigen: sortierte Nummern – oder undefined, wenn es alle sind. */
 export function normPersonModules(x, count = MODULE_COUNT) {
   if (!Array.isArray(x)) return undefined;
