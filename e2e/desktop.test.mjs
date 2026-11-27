@@ -112,8 +112,8 @@ test('baut keine Netzwerkverbindungen auf', async () => {
   errors.length = 0;                                   // die beiden Versuche erzeugen erwartete CSP-Meldungen
 });
 
-test('Menü: alle elf Ansichten sind erreichbar', async () => {
-  const expected = { overview: /^Übersicht/, year: /^Jahresplan/, capacity: /^Kapazität/, courses: /^Lehrg/, people: /^Personen/, routes: /^Ausbildungswege/, events: /^Termine/, absences: /^Abwesenheiten/, report: /^Bericht/, data: /^Daten/, help: /^Anleitung/ };
+test('Menü: alle zwölf Ansichten sind erreichbar', async () => {
+  const expected = { overview: /^Übersicht/, year: /^Jahresplan/, capacity: /^Kapazität/, courses: /^Lehrg/, people: /^Personen/, roster: /^Dienstplan/, routes: /^Ausbildungswege/, events: /^Termine/, absences: /^Abwesenheiten/, report: /^Bericht/, data: /^Daten/, help: /^Anleitung/ };
   for (const [id, re] of Object.entries(expected)) {
     await menu('go', id);
     await waitFor(async () => re.test(await page.textContent('#main h1')), 'Ansicht ' + id);
@@ -746,6 +746,166 @@ test('Dienstplan je Person: große Seitenleiste, Auswahl, Zeitraum, Wochenfolge 
   await page.click('[data-act="ros-edit"]');
   assert.equal(await page.locator('#rosTools').count(), 0);
   await page.click('[data-act="drawer-close"]');
+});
+
+test('Schichtplan: Excel des Auswertungssystems einspielen, Symbole zuordnen und im Dienstplan sehen', async () => {
+  // Tabelle im Aufbau des Auswertungssystems: Tage „01⏎Fr“ in Zeile 1, Beschriftung in Zeile 2, Monat und Jahr im Filtertext.
+  // Drei erfundene Personen, die es im Projekt nicht gibt, und eine vorhandene.
+  const Core = await import('../src/core/index.js');
+  const cal = Core.makeCalendar(2027), WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const day = ['DayDateRowWidth', '', '', '', ''], label = ['Team', 'Nachname', 'Vorname', 'U-Nummer', 'MF'];
+  for (let d = 0; d < 31; d++) { day.push(String(cal.dom[d]).padStart(2, '0') + '\r\n' + WD[cal.dow[d]]); label.push('Erstes Datum: ShiftShort_Masking'); }
+  const who = [['L/TM-M 12 MUC - CAB', 'Adler', 'Anna', '700101A', 'CAB'], ['L/TM-M 12 MUC - CAB', 'Bach', 'Ben', '700102B', 'CAB'], ['L/TM-M 12 MUC - IFE', 'Christ', 'Clara', '700103C', 'IFE'], ['Übung', 'Person', '001', 'D00001', 'CAB']];
+  const cell = (i, d) => cal.dow[d] === 0 || cal.dow[d] === 6 ? '-' : i === 1 && cal.dom[d] >= 11 && cal.dom[d] <= 15 ? 'Up' : i === 2 && cal.dom[d] === 20 ? 'LC*' : i === 2 ? 'S1' : i === 3 ? 'N2' : 'F1';
+  const rows = [day, label, ...who.map((p, i) => [...p, ...Array.from({ length: 31 }, (_, d) => cell(i, d))]), [], ['Angewendete Filter: \r\nSlicerCheckMonth ist 1\r\nYear-Default ist 2027\r\nMonat-Default ist Januar']];
+  const xlsx = path.join(TMP, 'Schichtplan_M1_Januar_27.xlsx');
+  fs.writeFileSync(xlsx, await Core.writeXlsx([{ name: 'Export', rows }]));
+  await menu('go', 'roster'); await page.waitForSelector('[data-act="imp-shiftplan"]');
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act="imp-shiftplan"]')]);
+  await chooser.setFiles(xlsx);
+  await page.waitForSelector('#modal #spSyms');
+  const facts = await page.locator('#modal .cmp').innerText();
+  assert.match(facts, /01\.01\.2027 – 31\.01\.2027 · 31 Tage/);
+  assert.match(facts, /1 im Projekt gefunden · 3 neu/);
+  assert.equal(await page.inputValue('#spMonth'), '1', 'Monat aus dem Filtertext');
+  assert.equal(await page.isChecked('#spPeople'), true);
+  // Vorschläge nur, wo sich die Bedeutung ablesen lässt; „Up“ und „LC*“ sind offen
+  assert.equal(await page.locator('#spSyms tbody tr').count(), 6);
+  assert.equal(await page.inputValue('#spSyms select[data-s="F1"]'), 'Früh');
+  assert.equal(await page.inputValue('#spSyms select[data-s="N2"]'), 'Nacht');
+  assert.equal(await page.inputValue('#spSyms select[data-s="-"]'), 'Frei');
+  assert.equal(await page.inputValue('#spSyms select[data-s="Up"]'), '');
+  assert.equal(await page.locator('#spSyms tr.rowwarn').count(), 2);
+  await page.selectOption('#spSyms select[data-s="Up"]', 'Urlaub');
+  assert.equal(await page.locator('#spSyms tr.rowwarn').count(), 1);
+  assert.match(await page.locator('#spSum').innerText(), /4 Personen · 78 Diensttage · 40 dienstfreie Tage · 1 Abwesenheiten mit 5 Tagen · 1 Tage mit Symbol ohne Bedeutung/);
+  await page.click('#modal [data-act="m:ok"]');
+  await page.waitForSelector('.rs-tbl');
+  await waitFor(async () => /Schichtplan übernommen: 4 Personen \(3 neu angelegt\)/.test(await toastText()), 'Meldung zur Übernahme');
+  // die Ansicht zeigt den Januar mit den Symbolen der Tabelle – in der Farbe ihrer Bedeutung
+  assert.equal(await page.locator('.rs-tbl thead th').count(), 32);
+  assert.equal(await page.getAttribute('[data-act="ros-month"][data-m="0"]', 'aria-pressed'), 'true');
+  await page.fill('#q-roster', 'Bach'); await waitFor(async () => (await page.locator('.rs-tbl tbody tr').count()) === 1, 'Suche im Dienstplan');
+  const cells = await page.evaluate(() => [...document.querySelectorAll('.rs-tbl tbody tr td:not(.rs-name)')].map(td => td.textContent + ':' + td.className.split(' ')[0]));
+  assert.equal(cells.length, 31);
+  assert.deepEqual(cells.slice(3, 10), ['F1:k-f', 'F1:k-f', 'F1:k-f', 'F1:k-f', 'F1:k-f', '-:k-free', '-:k-free']);          // Mo 04.01. – So 10.01.
+  assert.deepEqual(cells.slice(10, 15), ['Up:k-away', 'Up:k-away', 'Up:k-away', 'Up:k-away', 'Up:k-away']);
+  await page.fill('#q-roster', 'Christ'); await waitFor(async () => (await page.locator('.rs-tbl tbody tr').count()) === 1 && /Christ/.test(await page.locator('.rs-tbl tbody').innerText()), 'andere Person');
+  assert.equal(await page.locator('.rs-tbl td.k-open').count(), 1, 'Symbol ohne Bedeutung fällt auf');
+  assert.equal((await page.locator('.rs-tbl td.k-open').innerText()).trim(), 'LC*');
+  assert.match(await page.locator('#rsLegend').innerText(), /1 Symbol hat noch keine Bedeutung/);
+  // Bedeutung nachträglich festlegen: gilt sofort
+  await page.click('#rsLegend [data-act="sym-map"]'); await page.waitForSelector('#smSyms');
+  await page.selectOption('#smSyms select[data-s="LC*"]', 'Sonstiges');
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /Bedeutung gespeichert/.test(await toastText()), 'Bedeutung gespeichert');
+  await waitFor(async () => (await page.locator('.rs-tbl td.k-open').count()) === 0, 'kein offenes Symbol mehr');
+  // im Personenkalender stehen dieselben Symbole
+  await page.click('.rs-tbl tbody .rs-name button'); await page.waitForSelector('#pcal');
+  await waitFor(async () => (await page.locator('#pcal b.sy').count()) === 31, 'Symbole im Personenkalender');
+  assert.equal(await page.locator('#pcal b.sy:text-is("LC*")').count(), 1);
+  await page.click('[data-act="drawer-close"]'); await page.fill('#q-roster', '');
+  // Projektdatei: Personen, Dienstplan, Abwesenheiten, Symbole und die gemerkte Zuordnung
+  const file = path.join(TMP, 'Schichtplan.m1cockpit');
+  await nextSave(file); await menu('act', 'save-project-as');
+  await waitFor(() => fs.existsSync(file), 'Projektdatei mit Schichtplan');
+  const prj = JSON.parse(fs.readFileSync(file, 'utf8')), st = prj.years[prj.active], anna = st.people.find(p => p.pk === '700101A');
+  assert.deepEqual([anna.name, anna.org, anna.rights, anna.cluster], ['Adler, Anna', 'L/TM-M 12 MUC - CAB', 'CAB', 'offen']);
+  assert.deepEqual(st.settings.symbols, { '-': 'Frei', F1: 'Früh', S1: 'Spät', N2: 'Nacht', Up: 'Urlaub', 'LC*': 'Sonstiges' });
+  assert.deepEqual([...st.symbols.list].sort(), ['-', 'F1', 'LC*', 'N2', 'S1', 'Up']);
+  assert.deepEqual(Object.keys(st.symbols.days).sort(), ['700101A', '700102B', '700103C', 'D00001']);
+  assert.deepEqual(st.absences.filter(x => ['700102B', '700103C'].includes(x.pk)), [{ pk: '700102B', type: 'Urlaub', start: '2027-01-11', end: '2027-01-15' }, { pk: '700103C', type: 'Sonstiges', start: '2027-01-20', end: '2027-01-20' }]);
+  const back = Core.sanitize(st).state, days = Core.symbolsOf(back, '700103C', cal.n);
+  assert.deepEqual(days.slice(17, 24), ['S1', 'S1', 'LC*', 'S1', 'S1', '-', '-']);
+  assert.ok(st.realImports.some(r => r.kind === 'roster' && r.file === 'Schichtplan_M1_Januar_27.xlsx'));
+});
+
+test('Lehrgangsübersicht: Excel mit einem Blatt je Lehrgangsfamilie einspielen, Teilnehmer zuordnen, erneut einspielen', async () => {
+  // Mappe im Aufbau der Teilnehmerübersicht: Lehrgangszeile mit Beginn und Ende, darunter nummerierte Teilnehmer. Alles erfunden.
+  // Adler, Bach und Christ stehen seit dem Schichtplan im Projekt; die übrigen Teilnehmer gehören zu anderen Bereichen.
+  const Core = await import('../src/core/index.js');
+  const HEAD = ['', '', 'No.', 'Project', '', 'Product Duration', 'Quoten MUC', 'Scheduled Begin', 'Scheduled End', 'Provider', 'Location', 'Raum'];
+  const serial = iso => String(Math.round((Date.parse(iso + 'T00:00:00Z') - Date.UTC(1899, 11, 30)) / 864e5));
+  const course = (order, no, title, days, quota, start, end) => ['XY', order, no, title, '', String(days), quota == null ? '' : String(quota), serial(start), serial(end), 'Schule Nord', 'MUC', 'R1'];
+  const member = (n, name, id) => ['', '', n + '.', name, id];
+  const book = (theory, bach) => [
+    { name: 'TEC A330', rows: [HEAD, [], ['', '', '', 'TEC A330 – Lehrgänge 2027'],
+      course('2027-1001 2027-1002', '26-1574', 'Airbus A330 (RR Trent 700) B1 Theoretical', 20, 6, ...theory),
+      member(1, 'Anna Adler', '700101A'), ...(bach ? [member(2, 'Bach, Ben', 'U700102')] : []), member(3, 'Fremd, Fritz', '811111X'), member(4, '', ''),
+      course('2027-1003', '26-1575', 'Airbus A330 (RR Trent 700) B1 Practical', 5, 2, '2027-03-08', '2027-03-12'), member(1, 'Adler, Anna', '700101'), member(2, 'Hold, Hans', 'u822222')] },
+    { name: 'Run Up', rows: [[], HEAD, course('2027-1700', '27-0042', 'Engine Run-Up Refresher', 1, null, '2027-05-04', '2027-05-04'), member(1, 'Clara Christ', ''), member(2, 'Jung, Jana', '844444Y'),
+      course('2027-1701', '27-0043', 'Engine Run-Up Initial', 2, 3, '2027-06-01', '2027-06-02'), member(1, 'Kurz, Karl', '855555Z')] },
+    { name: 'Vorlage', rows: [HEAD] }];
+  const xlsx = path.join(TMP, 'Teilnehmeruebersicht_Lehrgaenge_2027.xlsx');
+  fs.writeFileSync(xlsx, await Core.writeXlsx(book(['2027-02-01', '2027-02-26'], true)));
+  const pick = async () => {
+    await menu('go', 'courses'); await page.waitForSelector('[data-act="crs-import"]');
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act="crs-import"]')]);
+    await chooser.setFiles(xlsx); await page.waitForSelector('#modal #ovTbl');
+  };
+  await pick();
+  const facts = (await page.locator('#modal .cmp').innerText()).replace(/\s+/g, ' ');
+  assert.match(facts, /Teilnehmerübersicht der Lehrgänge · 2 Blätter mit Lehrgängen/);
+  assert.match(facts, /Lehrgänge im Planungsjahr 2027 4/);
+  assert.match(facts, /Teilnehmerzeilen 8 · davon 4 von 3 Personen des Projekts/);
+  // Vorschlag: Lehrgänge der Ausbildungswege und solche mit eigenen Teilnehmern; Art und Zielmuster aus Blatt und Titel
+  assert.equal(await page.locator('#ovTbl tbody tr').count(), 4);
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#ovTbl [data-chg="m:take"]')].map(x => x.checked)), [true, true, true, false]);
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#ovTbl [data-chg="m:type"]')].map(x => x.value)), ['Theorie', 'Praxis', 'Sonstiger Lehrgang', 'Sonstiger Lehrgang']);
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#ovTbl [data-chg="m:target"]')].map(x => x.value + (x.disabled ? ' gesperrt' : ''))), ['A330', 'A330', ' gesperrt', ' gesperrt']);
+  assert.match(await page.locator('#ovSum').innerText(), /3 von 4 Lehrgängen gewählt · 4 Teilnahmen von Personen des Projekts/);
+  assert.match((await page.locator('#ovTbl tbody tr >> nth=0').innerText()).replace(/\s+/g, ' '), /Airbus A330 \(RR Trent 700\) B1 Theoretical Blatt „TEC A330“ · 2027-1002 .* 6 2 \+ 1/);
+  await page.check('#ovTbl [data-chg="m:take"][data-i="3"]');
+  assert.match(await page.locator('#ovSum').innerText(), /4 von 4 Lehrgängen gewählt/);
+  // Art umstellen: das Zielmuster gibt es nur bei den Schritten der Ausbildungswege
+  await page.selectOption('#ovTbl [data-chg="m:type"][data-i="1"]', 'Sonstiger Lehrgang');
+  assert.equal(await page.isDisabled('#ovTbl [data-chg="m:target"][data-i="1"]'), true);
+  await page.selectOption('#ovTbl [data-chg="m:type"][data-i="1"]', 'Praxis'); await page.selectOption('#ovTbl [data-chg="m:target"][data-i="1"]', 'A330');
+  assert.equal(await page.locator('#ovPrune').count(), 0, 'beim ersten Einspielen gibt es nichts auszutragen');
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /4 Lehrgänge ergänzt · 4 Teilnehmer eingetragen/.test(await toastText()), 'Meldung zur Übernahme');
+  // Zeitleiste: eigene Teilnehmer + anderweitig belegte Plätze / Plätze
+  const bar = ref => page.locator('.crs-time .cbar[aria-label*="' + ref + '"]');
+  await waitFor(async () => (await bar('2027-1002').count()) === 1, 'Lehrgang in der Zeitleiste');
+  assert.equal((await bar('2027-1002').innerText()).trim(), '2+1/6');
+  assert.equal((await bar('2027-1003').innerText()).trim(), '1+1/2 ✓', 'ausgebucht: ein eigener, ein fremder Teilnehmer bei zwei Plätzen');
+  assert.equal((await bar('2027-1700').innerText()).trim(), '1+1');
+  assert.equal((await bar('2027-1701').innerText()).trim(), '0+1/3');
+  await bar('2027-1002').click(); await page.waitForSelector('#crsDetail #crsExt');
+  assert.equal(await page.inputValue('#crsExt'), '1');
+  assert.match(await page.textContent('#crsDetail'), /2 von 6 Plätzen · 1 anderweitig belegt/);
+  assert.match(await page.textContent('#crsDetail'), /Adler/);
+  // Projektdatei: Kennung, Plätze, fremd belegte Plätze, Teilnehmer und die neue Art
+  const file = path.join(TMP, 'Lehrgangsuebersicht.m1cockpit');
+  const saved = async () => { if (fs.existsSync(file)) fs.unlinkSync(file); await nextSave(file); await menu('act', 'save-project-as'); await waitFor(() => fs.existsSync(file), 'Projektdatei mit Lehrgängen'); const prj = JSON.parse(fs.readFileSync(file, 'utf8')); return prj.years[prj.active]; };
+  let st = await saved();
+  const own = s => s.courses.filter(c => c.ref).map(c => [c.ref, c.title, c.type, c.target, c.start, c.end, c.seats, c.ext ?? 0, s.events.filter(e => e.courseId === c.id).map(e => e.pk).sort().join(' ')]);
+  assert.deepEqual(own(st), [
+    ['2027-1002', 'TEC A330 Theorie · 2027-1002', 'Theorie', 'A330', '2027-02-01', '2027-02-26', 6, 1, '700101A 700102B'],
+    ['2027-1003', 'TEC A330 Praxis · 2027-1003', 'Praxis', 'A330', '2027-03-08', '2027-03-12', 2, 1, '700101A'],
+    ['2027-1700', 'Engine Run-Up Refresher · 2027-1700', 'Sonstiger Lehrgang', '', '2027-05-04', '2027-05-04', null, 1, '700103C'],
+    ['2027-1701', 'Engine Run-Up Initial · 2027-1701', 'Sonstiger Lehrgang', '', '2027-06-01', '2027-06-02', 3, 1, '']]);
+  assert.ok(st.measures.some(m => m.name === 'Sonstiger Lehrgang' && m.course), 'die Art für sonstige Lehrgänge ist angelegt');
+  assert.ok(!st.people.some(p => /Fremd|Hold|Jung|Kurz/.test(p.name)), 'Teilnehmer anderer Bereiche werden nicht angelegt');
+  // Erneut einspielen: Theorie eine Woche später, Bach steht nicht mehr drin → aktualisieren statt verdoppeln
+  fs.writeFileSync(xlsx, await Core.writeXlsx(book(['2027-02-08', '2027-03-05'], false)));
+  await pick();
+  assert.equal(await page.locator('#ovTbl tbody tr:has-text("vorhanden")').count(), 4);
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll('#ovTbl [data-chg="m:take"]')].map(x => x.checked)), [true, true, true, true]);
+  assert.equal(await page.isChecked('#ovPrune'), true);
+  assert.match(await page.locator('#ovSum').innerText(), /4 von 4 Lehrgängen gewählt \(4 schon vorhanden – werden aktualisiert\) · 3 Teilnahmen/);
+  await page.click('#modal [data-act="m:ok"]');
+  await waitFor(async () => /4 vorhandene Lehrgänge aktualisiert · 0 Teilnehmer eingetragen · 1 ausgetragen/.test(await toastText()), 'Meldung zur Aktualisierung');
+  await waitFor(async () => (await bar('2027-1002').innerText()).trim() === '1+1/6', 'Teilnehmerzahl nach dem Austragen');
+  st = await saved();
+  assert.deepEqual(own(st)[0], ['2027-1002', 'TEC A330 Theorie · 2027-1002', 'Theorie', 'A330', '2027-02-08', '2027-03-05', 6, 1, '700101A']);
+  assert.equal(st.courses.filter(c => c.ref).length, 4, 'kein Lehrgang doppelt');
+  const e = st.events.find(x => x.pk === '700101A' && x.type === 'Theorie');
+  assert.deepEqual([e.start, e.end], ['2027-02-08', '2027-03-05'], 'der Teilnehmertermin zieht mit');
+  // Plätze, die andere belegen, lassen sich von Hand nachführen
+  await bar('2027-1002').click(); await page.waitForSelector('#crsDetail #crsExt');
+  await page.fill('#crsExt', '5'); await page.dispatchEvent('#crsExt', 'change');
+  await waitFor(async () => (await bar('2027-1002').innerText()).trim() === '1+5/6 ✓', 'ausgebucht nach der Änderung');
 });
 
 test('keine Programmfehler in der Oberfläche', () => { assert.deepEqual(errors, []); });

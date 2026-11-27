@@ -25,6 +25,9 @@ export function normalizeState(st) {
   if (Array.isArray(c.measures) && !c.measures.length) delete c.measures;
   if (c.measureEdits && !Object.keys(c.measureEdits).length) delete c.measureEdits;
   if (c.settings && c.settings.shifts && !Object.keys(c.settings.shifts).length) delete c.settings.shifts;
+  // Schichtsymbole kennt die Einzeldatei nicht; leer entsprechen sie ihrem Verhalten
+  if (c.symbols && !c.symbols.list.length && !Object.keys(c.symbols.days).length) delete c.symbols;
+  if (c.settings && c.settings.symbols && !Object.keys(c.settings.symbols).length) delete c.settings.symbols;
   return c;
 }
 export const normalizeEvents = evs => evs.map((e, i) => ({ ...e, id: 'E' + i }));

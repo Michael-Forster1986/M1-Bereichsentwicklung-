@@ -3,7 +3,7 @@ import { kArea, kShift, num } from './util.js';
 import { fmtShort, isoWeek } from './dates.js';
 import { buildIndex, capInfo } from './indexing.js';
 import { findConflicts } from './conflicts.js';
-import { courseDayList, courseMembers } from './courses.js';
+import { courseDayList, courseMembers, extSeats } from './courses.js';
 import { hasModules, isPartial, memberModules, moduleName, moduleText } from './modules.js';
 import { routeProgress, summarize } from './summary.js';
 import { labelOf } from './measures.js';
@@ -140,7 +140,7 @@ export function buildWorkbook(st, { privacy = false, today = new Date().toISOStr
   // Lehrgänge: je Teilnehmer eine Zeile; Lehrgänge ohne Teilnehmer stehen mit leerer Person
   const courseRows = [];
   for (const c of st.courses || []) {
-    const m = courseMembers(st, c.id), base = [c.title, labelOf(st, c.type), c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length];
+    const m = courseMembers(st, c.id), base = [c.title, labelOf(st, c.type), c.target, c.start, c.end, courseDayList(ix, c).length, c.seats ?? '', m.length + extSeats(c)];
     // Lehrgang mit Modulen: welche Module wann stattfinden – und je Teilnehmer, welche er belegt
     const mods = hasModules(c) ? c.modules.map(x => moduleName(x.no) + (x.na ? ' N/A' : ' ' + fmtShort(x.start) + (x.end !== x.start ? '–' + fmtShort(x.end) : ''))).join('; ') : '';
     if (!m.length) courseRows.push([...base, '', '', '', mods, '']);

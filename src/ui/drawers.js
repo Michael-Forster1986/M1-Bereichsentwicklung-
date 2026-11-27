@@ -1,5 +1,5 @@
 import * as Core from '../core/index.js';
-import { $, html, raw, setHTML } from './dom.js';
+import { $, esc, html, raw, setHTML } from './dom.js';
 import { MON, REPORT_STATUS, ROUTE_STATE, TSHORT, clusterLabel, dayLabel, fmt, fmtS, nf, opts, originOf, pill, sgn, tcls, tname, typeOpts } from './format.js';
 import { CONF, IX, P, PROG, S, UI, collator, commit, nameOf, pName, pidOf, privacy, sortKey } from './state.js';
 import { closeDrawer, closeModal, confirmDlg, openDrawer, openModal, toast } from './dialogs.js';
@@ -31,7 +31,7 @@ ACT['drawer-close'] = closeDrawer;
 
 // ---------- Person ------------------------------------------------------------
 function personCalendar(p) {
-  const i = IX.pi.get(p.pk), cal = IX.cal; let s = '<span></span>';
+  const i = IX.pi.get(p.pk), cal = IX.cal, sym = Core.symbolsOf(S, p.pk, cal.n); let s = '<span></span>';
   for (let dd = 1; dd <= 31; dd++) s += '<span class="dh' + (dd % 5 === 0 || dd === 1 ? '' : ' minor') + '">' + dd + '</span>';
   for (let m = 0; m < 12; m++) {
     s += '<span class="mh">' + MON[m] + '</span>';
@@ -40,7 +40,7 @@ function personCalendar(p) {
       if (dd >= len) { s += '<i class="none"></i>'; continue; }
       const d = cal.monthStart[m] + dd, k = Core.assign(IX, i, d), ev = IX.evByDay[d].find(e => e.pk === p.pk && e.type !== Core.PREP) || IX.evByDay[d].find(e => e.pk === p.pk);
       // fb = Dienst ist nicht eingetragen, sondern aus den Stammdaten angenommen; der Buchstabe erscheint in der großen Ansicht
-      s += '<i class="' + (k >= 0 ? 's-' + (k % 3) : 'free') + (k >= 0 && IX.ros[i][d] < 2 ? ' fb' : '') + (cal.dow[d] === 0 || cal.dow[d] === 6 ? ' wk' : '') + (IX.abs[i][d] ? ' ab' : '') + '" data-tk="pday" data-d="' + d + '">' + (k >= 0 ? '<b>' + 'FSN'[k % 3] + '</b>' : '') + (ev ? '<em class="' + tcls(ev.type) + '"></em>' : '') + '</i>';
+      s += '<i class="' + (k >= 0 ? 's-' + (k % 3) : 'free') + (k >= 0 && IX.ros[i][d] < 2 ? ' fb' : '') + (cal.dow[d] === 0 || cal.dow[d] === 6 ? ' wk' : '') + (IX.abs[i][d] ? ' ab' : '') + '" data-tk="pday" data-d="' + d + '">' + (sym[d] ? '<b class="sy">' + esc(sym[d]) + '</b>' : k >= 0 ? '<b>' + 'FSN'[k % 3] + '</b>' : '') + (ev ? '<em class="' + tcls(ev.type) + '"></em>' : '') + '</i>';
     }
   }
   return raw(s);
@@ -48,7 +48,8 @@ function personCalendar(p) {
 TIP.pday = t => {
   const sp = UI.drawer; if (!sp || sp.kind !== 'person') return null;
   const d = +t.dataset.d, i = IX.pi.get(sp.pk), k = Core.assign(IX, i, d), code = IX.ros[i][d], evs = IX.evByDay[d].filter(e => e.pk === sp.pk);
-  return html`<b>${dayLabel(d)}</b> <span class="k">${dayFlags(d)}</span><br>${k >= 0 ? Core.kArea(k) + ' · ' + Core.kShift(k) + (code < 2 ? ' (Szenariozuordnung)' : '') : code === 1 ? 'Frei' : 'Kein Dienst eingetragen'}
+  const sy = Core.symbolsOf(S, sp.pk, IX.n)[d];
+  return html`<b>${dayLabel(d)}</b> <span class="k">${dayFlags(d)}</span><br>${sy ? html`Symbol im Schichtplan: <b>${sy}</b><br>` : ''}${k >= 0 ? Core.kArea(k) + ' · ' + Core.kShift(k) + (code < 2 ? ' (Szenariozuordnung)' : '') : code === 1 ? 'Frei' : 'Kein Dienst eingetragen'}
     ${IX.abs[i][d] ? html`<br>Abwesend: ${Core.ABS_TYPES[IX.abs[i][d] - 1]}` : ''}${evs.map(e => html`<br><span class="key ${tcls(e.type)}"></span>${e.title || tname(e.type)} <span class="k">${originOf(e)}</span>`)}`;
 };
 function drawerPerson(p) {

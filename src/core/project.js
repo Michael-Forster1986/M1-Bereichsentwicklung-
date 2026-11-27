@@ -1,3 +1,5 @@
+import { normSymbols } from './symbols.js';
+import { normSymbolMap } from './shiftplan.js';
 import { moduleSpan, normModules } from './modules.js';
 import { normRules } from './rules.js';
 import { ABS_TYPES, AREAS, COURSE_TYPES, FORMAT, ROUTE_CLUSTERS, SHIFTS, TARGETS } from './constants.js';
@@ -33,9 +35,9 @@ export function normCourse(c, types = COURSE_TYPES) {
   const modules = normModules(c.modules, c.type), span = modules ? moduleSpan(modules) : null;
   const start = span ? span.start : normDate(c.start), end = span ? span.end : normDate(c.end);
   if (!start || !end || end < start) return null;
-  const seats = Math.round(num(c.seats));
+  const seats = Math.round(num(c.seats)), ext = Math.round(num(c.ext));
   return { id: String(c.id || uid()).slice(0, 60), type: c.type, title: String(c.title || c.type).trim().slice(0, 80) || c.type, target: TARGETS.includes(c.target) ? c.target : '',
-    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}), ...(modules ? { modules } : {}) };
+    start, end, seats: seats > 0 ? clamp(seats, 1, 500) : null, fixed: c.fixed !== false, ...(c.synthetic ? { synthetic: true } : {}), ...(c.note ? { note: String(c.note).slice(0, 200) } : {}), ...(c.ref ? { ref: String(c.ref).slice(0, 40) } : {}), ...(ext > 0 ? { ext: clamp(ext, 1, 500) } : {}), ...(modules ? { modules } : {}) };
 }
 /**
  * Bringt Lehrgänge und ihre Teilnehmertermine in Einklang: Termine ohne Lehrgang verlieren den Bezug, und
@@ -100,6 +102,8 @@ export function sanitize(x) {
   S.courseBlocks = xs.courseBlocks !== false;
   S.shifts = normShifts(xs.shifts, [...types, 'Sonstiges']);
   { const r = normRules(xs.rules, types); if (Object.keys(r).length) S.rules = r; }
+  { const m = normSymbolMap(xs.symbols); if (Object.keys(m).length) S.symbols = m; }
+  st.symbols = normSymbols(x.symbols, n, seen);
   if (Array.isArray(xs.sick) && xs.sick.length === 12 && xs.sick.every(v => fin(v) && v >= 0 && v <= 50)) S.sick = xs.sick.slice();
   st.report = (Array.isArray(x.report) ? x.report : []).filter(r => r && seen.has(String(r.pk))).map(r => ({ pk: String(r.pk), status: String(r.status || 'open'), reason: String(r.reason || '').slice(0, 400), ...(Array.isArray(r.remaining) ? { remaining: r.remaining.map(String) } : {}) }));
   st.planInfo = x.planInfo && typeof x.planInfo === 'object' ? { at: String(x.planInfo.at || ''), mode: String(x.planInfo.mode || ''), variant: String(x.planInfo.variant || ''), tried: num(x.planInfo.tried) } : null;

@@ -81,7 +81,7 @@ VIEWS.fullreport = {
 
       ${S.courses.length ? html`<section class="pb"><h2>Lehrgänge (${nf(S.courses.length)})</h2>
         <table class="tbl"><thead><tr><th>Lehrgang</th><th>Art</th><th>Zeitraum</th><th class="n">Tage</th><th class="n">Teilnehmer</th><th>Wer</th></tr></thead><tbody>
-          ${S.courses.map(c => { const m = Core.courseMembers(S, c.id); return html`<tr><td><i class="sw ${tcls(c.type)}"></i> ${c.title}</td><td>${tname(c.type)}${c.target ? ' · ' + c.target : ''}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td class="n">${Core.courseDayList(IX, c).length}</td><td class="n">${m.length}${c.seats != null ? ' / ' + c.seats : ''}</td><td class="muted">${m.map(e => nameOf(e.pk)).sort(collator.compare).join(', ')}</td></tr>`; })}</tbody></table></section>` : ''}
+          ${S.courses.map(c => { const m = Core.courseMembers(S, c.id); return html`<tr><td><i class="sw ${tcls(c.type)}"></i> ${c.title}</td><td>${tname(c.type)}${c.target ? ' · ' + c.target : ''}</td><td class="num nowrap">${fmtS(c.start)} – ${fmt(c.end)}</td><td class="n">${Core.courseDayList(IX, c).length}</td><td class="n">${m.length}${Core.extSeats(c) ? ' + ' + Core.extSeats(c) : ''}${c.seats != null ? ' / ' + c.seats : ''}</td><td class="muted">${m.map(e => nameOf(e.pk)).sort(collator.compare).join(', ')}</td></tr>`; })}</tbody></table></section>` : ''}
 
       <section class="pb"><h2>7 · Terminliste (${nf(evs.length)})</h2>
         ${evs.length ? html`<table class="tbl"><thead><tr><th>Person</th><th>Maßnahme</th><th>Beginn</th><th>Ende</th><th class="n">Tage</th><th>Herkunft</th><th>Prüfung</th></tr></thead><tbody>

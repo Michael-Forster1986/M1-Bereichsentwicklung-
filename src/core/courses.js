@@ -252,6 +252,10 @@ export function courseWindow(st, ix, p, type) {
   }
   return win;
 }
+/** Plätze, die Personen außerhalb des Projekts belegen (aus der Teilnehmerübersicht der Lehrgänge). */
+export const extSeats = c => Math.max(0, Math.round(Number(c && c.ext) || 0));
+/** Freie Plätze eines Lehrgangs bei taken Teilnehmern aus dem Projekt; null = Platzzahl offen. */
+export const freeSeats = (c, taken) => c.seats == null ? null : Math.max(0, c.seats - extSeats(c) - taken);
 /** Personen, die für einen Lehrgang in Frage kommen: Bedarf an dieser Art (und diesem Zielmuster), noch ohne Platz. */
 export function courseCandidates(st, ix, c) {
   const have = new Set(courseMembers(st, c.id).map(e => e.pk)), out = [];
@@ -264,7 +268,7 @@ export function courseCandidates(st, ix, c) {
  * opt.group 'max' (Vorgabe): bestmögliche Besetzung der freien Plätze · 'all': alle genannten Personen gemeinsam.
  */
 export function assessCourse(st, ix, c, pks, opt = {}) {
-  const list = pks.filter(pk => ix.pi.has(pk)), taken = courseMembers(st, c.id).length, free = c.seats == null ? null : Math.max(0, c.seats - taken);
+  const list = pks.filter(pk => ix.pi.has(pk)), taken = courseMembers(st, c.id).length, free = freeSeats(c, taken);
   const window = new Map(list.map(pk => [pk, courseWindow(st, ix, ix.people.get(pk), c.type)])), group = opt.group || 'max';
   const mod = hasModules(c) ? { days: courseDayList(ix, c), daysOf: pk => memberDayList(ix, c, ix.people.get(pk)) } : {};
   const o = { threshold: 'zero', freePolicy: 'adjust', ignoreReplaceable: true, avoidSchool: false, minGroup: 1, ...opt, ...mod, group, pks: list, start: c.start, end: c.end, window, shiftType: c.type,

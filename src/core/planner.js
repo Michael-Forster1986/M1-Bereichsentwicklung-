@@ -4,7 +4,7 @@ import { clamp, num, uid } from './util.js';
 import { fmtDE, validDate } from './dates.js';
 import { cfgOf, creditOf, isLocked, routeOf } from './people.js';
 import { addLoad, assign, newLoad } from './indexing.js';
-import { courseAudience, courseDayList, memberDayList } from './courses.js';
+import { courseAudience, courseDayList, freeSeats, memberDayList } from './courses.js';
 import { hasModules } from './modules.js';
 import { FRAME_TYPE, rulesOf } from './rules.js';
 
@@ -126,7 +126,7 @@ export function runPlan(st, ix, opt = {}) {
             const ds = daysFor(x);
             if (!ds.length && hasModules(x)) return 'keines der benötigten Module findet statt';
             if (!ds.length || ds[0] < cursor) return 'liegt vor dem möglichen Beginn';
-            if (x.seats != null && (seatUse.get(x.id) || 0) >= x.seats) return 'ausgebucht';
+            if (freeSeats(x, seatUse.get(x.id) || 0) === 0) return 'ausgebucht';
             for (const d of ds) { if (ix.abs[i][d]) return 'Abwesenheit'; if (o[d]) return 'Terminkollision'; }
             for (const d of ds) { const k = assign(ix, i, d); if (k >= 0 && !fits(k, d, c, sum)) return 'Kapazität'; }
             return '';

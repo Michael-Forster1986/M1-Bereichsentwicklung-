@@ -23,8 +23,11 @@ export function parseCSV(text) {
 export const normHead = h => String(h ?? '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
 export const HEAD = {};
 const alias = (key, ...names) => names.forEach(nm => { HEAD[normHead(nm)] = key; });
-alias('pk', 'pk', 'Personalnummer', 'PersNr', 'Pers.-Nr.', 'Personalnr', 'PNR');
+alias('pk', 'pk', 'Personalnummer', 'PersNr', 'Pers.-Nr.', 'Personalnr', 'PNR', 'U-Nummer', 'U-Nr.', 'Stammnummer');
 alias('name', 'name', 'Mitarbeiter', 'Nachname, Vorname', 'Mitarbeitername');
+alias('lastname', 'lastname', 'Nachname', 'Familienname');
+alias('firstname', 'firstname', 'Vorname');
+alias('role', 'role', 'MF', 'Funktion', 'Mitarbeiterfunktion');
 alias('org', 'org', 'OrgEinheit', 'Organisationseinheit', 'Abteilung', 'Team', 'OE');
 alias('rights', 'rights', 'Berechtigung', 'Bestehende Berechtigung', 'Berechtigungen');
 alias('cluster', 'cluster');
