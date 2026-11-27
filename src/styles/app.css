@@ -641,3 +641,7 @@ body.painting,body.painting *{user-select:none!important}
 #ovTbl td .xs{margin-top:1px}
 #ovTbl td:first-child,#ovTbl th:first-child{padding-right:2px}
 #ovTbl td{vertical-align:top}
+
+/* Lehrgang bearbeiten: sieben Felder in einer Zeile; im schmalen Fenster steht die Bezeichnung über den übrigen */
+#crsForm{margin:10px 0 12px;grid-template-columns:minmax(150px,2fr) repeat(4,minmax(110px,1fr)) minmax(64px,.55fr) minmax(112px,.8fr)}
+@media (max-width:1180px){#crsForm{grid-template-columns:repeat(4,minmax(0,1fr))}#crsForm>label:first-child{grid-column:1/-1}}

@@ -202,14 +202,14 @@ function detail(c) {
   const people = S.people.filter(p => !Core.isLocked(p) && !members.some(e => e.pk === p.pk) && !cand.includes(p.pk)).slice().sort((x, y) => collator.compare(sortKey(x), sortKey(y)));
   return html`<div class="card" id="crsDetail"><div class="row"><h3 style="font-size:14.5px;font-weight:650"><i class="sw ${tcls(c.type)}"></i> ${c.title}</h3>${c.synthetic ? pill('Szenario', '') : ''}<span class="sp"></span>
       <button class="btn sm danger" data-act="crs-delete" data-id="${c.id}">Lehrgang löschen</button><button class="btn sm" data-act="crs-select" data-id="">Schließen</button></div>
-    <div class="form" style="margin:10px 0 12px;grid-template-columns:minmax(180px,2fr) repeat(5,minmax(110px,1fr))">
+    <div class="form" id="crsForm">
       <label class="f">Bezeichnung<input type="text" maxlength="80" value="${c.title}" data-chg="crs" data-f="title"></label>
       <label class="f">Art<select data-chg="crs" data-f="type">${opts(typeOpts(Core.courseTypesOf(S)), c.type)}</select></label>
       <label class="f" data-tip="Mit Zielmuster: Lehrgang für Cluster 5 mit genau diesem Muster (TEC). Ohne: Lehrgang der übrigen Cluster (CAT-A-Kursrahmen).">Zielmuster<select data-chg="crs" data-f="target">${opts([['', 'ohne (CAT A)'], ...Core.TARGETS], c.target)}</select></label>
       <label class="f" ${mod ? raw('data-tip="Ergibt sich aus den Modulen"') : ''}>Beginn<input type="date" value="${c.start}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="start" ${mod ? raw('disabled') : ''}></label>
       <label class="f" ${mod ? raw('data-tip="Ergibt sich aus den Modulen"') : ''}>Ende<input type="date" value="${c.end}" min="${yr}-01-01" max="${yr}-12-31" data-chg="crs" data-f="end" ${mod ? raw('disabled') : ''}></label>
       <label class="f">Plätze<input type="number" min="1" max="500" value="${c.seats ?? ''}" placeholder="offen" data-chg="crs" data-f="seats" style="width:100%"></label>
-      <label class="f" data-tip="Plätze, die Kolleginnen und Kollegen anderer Bereiche belegen. Sie stehen nicht im Projekt, zählen aber bei den freien Plätzen mit.">davon anderweitig belegt<input type="number" min="0" max="500" value="${ext || ''}" placeholder="0" data-chg="crs" data-f="ext" id="crsExt" style="width:100%"></label></div>
+      <label class="f" data-tip="Plätze, die Kolleginnen und Kollegen anderer Bereiche belegen. Sie stehen nicht im Projekt, zählen aber bei den freien Plätzen mit."><span class="nowrap">anderweitig belegt</span><input type="number" min="0" max="500" value="${ext || ''}" placeholder="0" data-chg="crs" data-f="ext" id="crsExt" style="width:100%"></label></div>
     ${Core.moduleCountOf(c.type) ? html`<div class="crs-mods" id="crsMods">
       <label class="c"><input type="checkbox" data-chg="crs-partial" ${mod ? raw('checked') : ''}> <span><b>Teilbeleger dabei</b> – einzelne Personen belegen nur bestimmte Module${mod ? '' : '. Ohne Teilbeleger belegen alle den ganzen Zeitraum; die Module müssen dann nicht einzeln festgelegt werden.'}</span></label>
       ${mod ? html`<div class="mod-chips">${c.modules.map(m => m.na ? html`<span class="mchip na" data-tip="${Core.moduleName(m.no)} findet nicht statt">${Core.moduleName(m.no)} · N/A</span>` : html`<span class="mchip"><b>${Core.moduleName(m.no)}</b> ${modSpan(m)}</span>`)}
