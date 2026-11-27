@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
@@ -11,11 +12,15 @@ const CSP = {
   dev: "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:*; form-action 'none'; base-uri 'none'"
 };
 
+// Versionsnummer aus package.json – steht oben links im Programm, auch in der Einzeldatei für den Browser
+const VERSION = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
+
 export default defineConfig(({ command, mode }) => {
   const standalone = mode === 'standalone';
   const csp = command === 'serve' ? CSP.dev : standalone ? CSP.standalone : CSP.app;
   return {
     base: './',
+    define: { __APP_VERSION__: JSON.stringify(VERSION) },
     plugins: [
       { name: 'm1-csp', transformIndexHtml: html => html.replace('__CSP__', csp) },
       ...(standalone ? [viteSingleFile()] : [])

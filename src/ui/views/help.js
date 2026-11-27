@@ -207,7 +207,7 @@ VIEWS.help = {
           <tr><td><b>Ansicht als PDF</b></td><td>Die aktuelle Ansicht, z. B. der Jahresplan</td><td>${isDesktop ? 'Datei → Exportieren' : '„Drucken“ → Als PDF speichern'}</td></tr>
           <tr><td><b>CSV-Listen</b></td><td>Termine, Lehrgänge, Personen, Tageskapazität, Abwesenheiten</td><td>Schaltfläche „CSV“ in der jeweiligen Ansicht</td></tr></tbody></table></div>
         ${isDesktop ? html`<h3>Neue Programmversionen</h3>
-        <p>Das installierte Programm sucht kurz nach dem Start und danach alle sechs Stunden nach einer neueren Version, lädt sie im Hintergrund und installiert sie beim Beenden. Sie müssen nichts herunterladen. Ein Hinweis meldet, wenn eine Version bereitliegt; „Jetzt neu starten“ installiert sofort.</p>
+        <p>Welche Version läuft, steht <b>oben links neben dem Programmnamen</b>. Das installierte Programm sucht kurz nach dem Start und danach alle sechs Stunden nach einer neueren Version, lädt sie im Hintergrund und installiert sie beim Beenden. Sie müssen nichts herunterladen. Ein Hinweis meldet, wenn eine Version bereitliegt; „Jetzt neu starten“ installiert sofort.</p>
         <ul class="h-list"><li><b>Voraussetzung:</b> das Programm ist über das Setup installiert und der Rechner erreicht GitHub. Die portable Fassung meldet eine neue Version nur.</li>
           <li><b>Abschalten und Stand:</b> unter ${go('data', 'Daten & Datenschutz')} auf der Karte „Programm-Aktualisierung“; von Hand suchen Sie über Hilfe → Nach Aktualisierung suchen.</li></ul>` : ''}
         <h3>Dateien zum Einspielen</h3>

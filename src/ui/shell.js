@@ -1,4 +1,4 @@
-import { isDesktop } from '../platform/desktop.js';
+import { APP_VERSION, isDesktop } from '../platform/desktop.js';
 import { $, $$, html, raw, setHTML } from './dom.js';
 import { DATA_CLASS, nf } from './format.js';
 import { HARD, LS, S, UI, autosave, dirty, future, hist, privacy, redo, store, undo } from './state.js';
@@ -51,7 +51,9 @@ export function go(view) { UI.view = view; hideTip(); render(); $('#main').focus
 export function renderTop() {
   const dc = DATA_CLASS[S.meta.dataClass] || DATA_CLASS.real, cap = S.settings.cap;
   setHTML($('#top'), html`
-    <div class="brand"><b>M1 Qualifikationscockpit</b><span>${S.meta.title}</span></div>
+    <div class="brand"><b>M1 Qualifikationscockpit</b></div>
+    ${APP_VERSION ? html`<small class="ver" id="appVersion" ${isDesktop ? raw('data-act="go" data-id="data"') : ''} data-tip="Programmversion ${APP_VERSION}${isDesktop ? ' – anklicken: Stand der Aktualisierung unter „Daten & Datenschutz“' : ''}"><i>Version </i>${APP_VERSION}</small>` : ''}
+    <span class="ptitle">${S.meta.title}</span>
     ${yearSelect()}
     <span class="pill" ${S.meta.dataClass === 'demo' ? raw('data-act="go" data-id="data" style="cursor:pointer"') : ''} data-tip="${S.meta.dataClass === 'demo' ? 'Alle Personen, Dienstpläne und Abwesenheiten sind frei erfunden. Anklicken: zum Schalter des Übungsmodus.' : S.meta.dataClass === 'real' ? 'Enthält Personendaten. Datei und Sicherungen nur im berechtigten Umfeld speichern.' : S.meta.dataClass === 'pseudo' ? 'Namen und Personalnummern sind durch Pseudonyme ersetzt.' : 'Noch keine Personen geladen.'}">${S.meta.dataClass === 'demo' ? 'Übungsmodus · simulierte Daten' : dc[0]}</span>
     <span class="pill hide-s" data-tip="${cap ? 'Kapazität wird verbindlich geprüft: fehlende Tagesdaten blockieren die Planung.' : 'Szenariomodus: Termine werden ohne verbindliche Kapazitätsprüfung verteilt.'}">${cap ? 'Kapazitätsmodus' : 'Szenariomodus'}</span>

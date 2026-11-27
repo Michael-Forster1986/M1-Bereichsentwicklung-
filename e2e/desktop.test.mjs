@@ -70,6 +70,24 @@ test('startet als Desktop-Programm aus dem Programmpaket', async () => {
   assert.match(await page.evaluate(() => navigator.language), /^de/, 'deutsche Oberfläche unabhängig von der Systemsprache');
 });
 
+test('Kopfzeile: die Programmversion steht oben links neben dem Programmnamen', async () => {
+  const version = await app.evaluate(({ app: a }) => a.getVersion());
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  if (!PACKAGED) assert.equal(version, JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version);
+  assert.equal((await page.locator('#top #appVersion').textContent()).trim(), 'Version ' + version);          // im schmalen Fenster ist nur die Nummer sichtbar
+  assert.equal(await page.isVisible('#appVersion'), true);
+  // links oben: gleich hinter dem Programmnamen, in der Kopfzeile sichtbar
+  const name = await page.locator('#top .brand b').boundingBox(), ver = await page.locator('#appVersion').boundingBox(), top = await page.locator('#top').boundingBox();
+  assert.ok(ver.x >= name.x + name.width - 1 && ver.x < name.x + name.width + 40, 'direkt hinter dem Programmnamen');
+  assert.ok(ver.y >= top.y && ver.y + ver.height <= top.y + top.height + 1, 'in der Kopfzeile');
+  assert.ok(ver.x + ver.width < 520, 'im linken Teil der Kopfzeile');
+  // die Nummer ist vollständig zu sehen – nichts ist abgeschnitten
+  // die Nummer ist vollständig zu sehen, und nichts ragt rechts aus der Kopfzeile
+  assert.deepEqual(await page.evaluate(() => { const el = document.querySelector('#appVersion'), hit = r => document.elementFromPoint(r.left + 2, r.top + r.height / 2), r = el.getBoundingClientRect(), last = [...document.querySelectorAll('#top > *')].filter(e => e.getBoundingClientRect().width > 0).pop().getBoundingClientRect();
+    const at = hit(r);
+    return { ganz: el.scrollWidth <= el.clientWidth + 1 && (at === el || el.contains(at)), imFenster: last.right <= innerWidth + 0.5 }; }), { ganz: true, imFenster: true });
+});
+
 test('Normalbetrieb startet leer; der Übungsmodus lädt simulierte Daten und bleibt gespeichert', async () => {
   const settings = () => JSON.parse(fs.readFileSync(path.join(USER_DATA, 'einstellungen.json'), 'utf8'));
   assert.equal(await page.locator('#rail [data-id="people"] .cnt').innerText(), '0', 'ohne Übungsmodus enthält das Programm keine Personen');

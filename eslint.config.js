@@ -6,7 +6,7 @@ export default [
   js.configs.recommended,
   {
     files: ['src/**/*.js'],
-    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser } },
+    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.browser, __APP_VERSION__: 'readonly' } },   // __APP_VERSION__ setzt der Build (vite.config.js)
     rules: { 'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none' }], 'no-empty': ['error', { allowEmptyCatch: true }] }
   },
   {

@@ -54,10 +54,17 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ---------- Rahmen ---------- */
 .app{display:grid;grid-template:var(--top-h) 1fr / var(--rail-w) 1fr;height:100vh;min-height:0}
 .top{grid-column:1/-1;background:var(--chrome);color:var(--chrome-ink);display:flex;align-items:center;gap:10px;padding:0 14px 0 16px;min-width:0}
-.brand{display:flex;align-items:baseline;gap:10px;min-width:0;margin-right:6px;flex:0 1 auto;overflow:hidden}
-.brand b{font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.top .btn,.top .pill{flex:none}
-.brand span{color:var(--chrome-muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Kopfzeile links: Programmname, Versionsnummer, Projekttitel. Wird es eng, geben zuerst der Projekttitel, dann die
+   Hinweisfelder und der Name nach – die Versionsnummer bleibt immer ganz sichtbar. */
+.brand{min-width:0;flex:0 1 auto;overflow:hidden}
+.brand b{display:block;font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .btn{flex:none}
+.top .pill{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.top .ver{flex:none;font-size:11.5px;font-weight:600;line-height:1;color:var(--chrome-muted);border:1px solid color-mix(in srgb,var(--chrome-muted) 55%,transparent);border-radius:999px;padding:3px 8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.top .ver i{font-style:normal}
+.top .ver[data-act]{cursor:pointer}
+.top .ver[data-act]:hover{color:#fff;border-color:#fff}
+.top .ptitle{flex:0 20 auto;min-width:0;margin-right:6px;color:var(--chrome-muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top .btn{background:transparent;border-color:rgba(255,255,255,.22);color:var(--chrome-ink)}
 .top .btn:hover{background:rgba(255,255,255,.1)}
 .top .btn.primary{background:#fff;color:var(--chrome);border-color:#fff;font-weight:600}
@@ -320,7 +327,8 @@ button.kpi{cursor:pointer} button.kpi:hover{border-color:var(--line-2);backgroun
   .rail{display:flex;gap:2px;padding:6px 8px;border-right:0;border-bottom:1px solid var(--line);overflow:auto;white-space:nowrap}
   .rail h4{display:none} .rail button{width:auto;flex:none}
   .grid2{grid-template-columns:1fr} main{padding:14px 12px 30px}
-  .brand span,.top .hide-s{display:none} .gantt{--lw:150px}
+  .top .ptitle,.top .hide-s{display:none} .gantt{--lw:150px}
+  .top .ver i{display:none}                    /* schmales Fenster: nur die Nummer */
 }
 @media (max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.top .hide-xs,.top .pill{display:none}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
